@@ -245,9 +245,11 @@ const QList<Migracao> &todas()
 int versaoAtual(QSqlDatabase &db)
 {
     QSqlQuery q(db);
+    int versao = 0;
     if (q.exec(QStringLiteral("PRAGMA user_version")) && q.next())
-        return q.value(0).toInt();
-    return 0;
+        versao = q.value(0).toInt();
+    q.finish();  // não deixa a consulta aberta
+    return versao;
 }
 
 bool aplicar(QSqlDatabase &db, QString *erro)
@@ -284,12 +286,17 @@ bool aplicar(QSqlDatabase &db, QString *erro)
             ok = false;
         }
 
+        // Encerra a consulta ANTES do commit/rollback: o SQLite recusa o COMMIT
+        // ("SQL statements in progress") se ainda houver uma consulta aberta.
+        q.finish();
+
         if (!ok) {
             db.rollback();
             return false;
         }
         if (!db.commit()) {
             if (erro) *erro = db.lastError().text();
+            db.rollback();  // não deixa a transação pendurada
             return false;
         }
     }
