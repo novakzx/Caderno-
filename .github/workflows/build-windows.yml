@@ -1,0 +1,62 @@
+# Compila o Professor Organizado no Windows (MSVC + Qt 6) e publica uma pasta pronta
+# para rodar. Como usar: veja a seção "Build na nuvem" do README.md.
+#
+# Roda sozinho a cada push e também manualmente (aba Actions > Build Windows > Run workflow).
+name: Build Windows
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      # O QXlsx (importar/exportar Excel) fica em third_party/QXlsx, como o CMakeLists.txt espera.
+      # Se você já incluiu essa pasta no repositório, este passo não faz nada.
+      - name: Baixar o QXlsx
+        shell: pwsh
+        run: |
+          if (-not (Test-Path third_party/QXlsx/QXlsx/CMakeLists.txt)) {
+            git clone --depth 1 https://github.com/QtExcel/QXlsx third_party/QXlsx
+          }
+
+      - name: Instalar o Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.*"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Configurar (CMake)
+        run: cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=OFF
+
+      - name: Compilar
+        run: cmake --build build --config Release --parallel
+
+      - name: Rodar os testes
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      # windeployqt copia para a pasta do .exe as DLLs do Qt e os plugins que ele precisa
+      # (inclusive o driver do SQLite), para rodar em qualquer PC sem instalar o Qt.
+      - name: Empacotar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/ProfOrganizer | Out-Null
+          Copy-Item build/Release/ProfOrganizer.exe dist/ProfOrganizer/
+          windeployqt --release --no-translations --no-system-d3d-compiler dist/ProfOrganizer/ProfOrganizer.exe
+          Get-ChildItem dist/ProfOrganizer -Recurse | Measure-Object Length -Sum |
+            ForEach-Object { "{0} arquivos, {1:N1} MB" -f $_.Count, ($_.Sum / 1MB) }
+
+      - name: Publicar o resultado
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProfOrganizer-windows
+          path: dist/ProfOrganizer
+          if-no-files-found: error

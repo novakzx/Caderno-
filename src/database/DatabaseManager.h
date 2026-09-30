@@ -1,0 +1,21 @@
+#pragma once
+
+#include <QString>
+
+// Abre o arquivo SQLite, liga as chaves estrangeiras e aplica as migrações.
+// Usa a conexão padrão do Qt (QSqlDatabase::database()), que os repositórios
+// consomem.
+class DatabaseManager {
+public:
+    // Caminho padrão do arquivo: pasta de dados do aplicativo do usuário
+    // (Windows: %APPDATA%/ProfOrganizer/ProfOrganizer/professor.db).
+    static QString caminhoPadrao();
+
+    // Abre (criando se necessário) e migra o banco. Retorna false em caso de erro.
+    bool abrir(const QString &caminho);
+
+    QString ultimoErro() const { return m_erro; }
+
+private:
+    QString m_erro;
+};
