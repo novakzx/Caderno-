@@ -35,7 +35,7 @@ QList<Anexo> AnexoRepository::consultar(const QString &where, int valor)
     QSqlQuery q;
     q.prepare(QStringLiteral("%1WHERE %2 ORDER BY x.criado_em DESC, x.id DESC")
                   .arg(QLatin1String(SELECT_BASE), where));
-    q.bindValue(QStringLiteral(":valor"), valor);
+    ligar(q, QStringLiteral(":valor"), valor);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -70,12 +70,12 @@ int AnexoRepository::inserir(const Anexo &a)
     q.prepare(QStringLiteral(
         "INSERT INTO anexos (turma_id, aula_id, aluno_id, nome, caminho, tipo) "
         "VALUES (:turma, :aula, :aluno, :nome, :caminho, :tipo)"));
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(a.turmaId));
-    q.bindValue(QStringLiteral(":aula"), nuloSeZero(a.aulaId));
-    q.bindValue(QStringLiteral(":aluno"), nuloSeZero(a.alunoId));
-    q.bindValue(QStringLiteral(":nome"), a.nome);
-    q.bindValue(QStringLiteral(":caminho"), a.caminho);
-    q.bindValue(QStringLiteral(":tipo"), a.tipo);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(a.turmaId));
+    ligar(q, QStringLiteral(":aula"), nuloSeZero(a.aulaId));
+    ligar(q, QStringLiteral(":aluno"), nuloSeZero(a.alunoId));
+    ligar(q, QStringLiteral(":nome"), a.nome);
+    ligar(q, QStringLiteral(":caminho"), a.caminho);
+    ligar(q, QStringLiteral(":tipo"), a.tipo);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -88,7 +88,7 @@ bool AnexoRepository::remover(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM anexos WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();

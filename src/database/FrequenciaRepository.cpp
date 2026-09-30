@@ -27,8 +27,8 @@ QHash<int, RegistroFrequencia> FrequenciaRepository::doDia(int turmaId, const QD
     q.prepare(QStringLiteral(
         "SELECT f.aluno_id, f.data, f.situacao, f.justificativa FROM frequencia f "
         "JOIN alunos a ON a.id = f.aluno_id WHERE a.turma_id = :turma AND f.data = :data"));
-    q.bindValue(QStringLiteral(":turma"), turmaId);
-    q.bindValue(QStringLiteral(":data"), data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":turma"), turmaId);
+    ligar(q, QStringLiteral(":data"), data.toString(Qt::ISODate));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -50,10 +50,10 @@ bool FrequenciaRepository::salvar(int alunoId, const QDate &data, QChar situacao
         "VALUES (:aluno, :data, :sit, :just) "
         "ON CONFLICT (aluno_id, data) DO UPDATE SET situacao = excluded.situacao, "
         "justificativa = excluded.justificativa"));
-    q.bindValue(QStringLiteral(":aluno"), alunoId);
-    q.bindValue(QStringLiteral(":data"), data.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":sit"), QString(situacao));
-    q.bindValue(QStringLiteral(":just"), justificativa);
+    ligar(q, QStringLiteral(":aluno"), alunoId);
+    ligar(q, QStringLiteral(":data"), data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":sit"), QString(situacao));
+    ligar(q, QStringLiteral(":just"), justificativa);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -66,8 +66,8 @@ bool FrequenciaRepository::remover(int alunoId, const QDate &data)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM frequencia WHERE aluno_id = :aluno AND data = :data"));
-    q.bindValue(QStringLiteral(":aluno"), alunoId);
-    q.bindValue(QStringLiteral(":data"), data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":aluno"), alunoId);
+    ligar(q, QStringLiteral(":data"), data.toString(Qt::ISODate));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -83,9 +83,9 @@ bool FrequenciaRepository::marcarRestantes(int turmaId, const QDate &data, QChar
     q.prepare(QStringLiteral(
         "INSERT OR IGNORE INTO frequencia (aluno_id, data, situacao) "
         "SELECT id, :data, :sit FROM alunos WHERE turma_id = :turma AND ativo = 1"));
-    q.bindValue(QStringLiteral(":data"), data.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":sit"), QString(situacao));
-    q.bindValue(QStringLiteral(":turma"), turmaId);
+    ligar(q, QStringLiteral(":data"), data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":sit"), QString(situacao));
+    ligar(q, QStringLiteral(":turma"), turmaId);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -107,9 +107,9 @@ QHash<int, ResumoFrequencia> FrequenciaRepository::resumoPorAluno(int turmaId, c
         "FROM frequencia f JOIN alunos a ON a.id = f.aluno_id "
         "WHERE a.turma_id = :turma AND (:de = '' OR f.data >= :de) AND (:ate = '' OR f.data <= :ate) "
         "GROUP BY f.aluno_id"));
-    q.bindValue(QStringLiteral(":turma"), turmaId);
-    q.bindValue(QStringLiteral(":de"), de.isValid() ? de.toString(Qt::ISODate) : QString());
-    q.bindValue(QStringLiteral(":ate"), ate.isValid() ? ate.toString(Qt::ISODate) : QString());
+    ligar(q, QStringLiteral(":turma"), turmaId);
+    ligar(q, QStringLiteral(":de"), de.isValid() ? de.toString(Qt::ISODate) : QString());
+    ligar(q, QStringLiteral(":ate"), ate.isValid() ? ate.toString(Qt::ISODate) : QString());
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -135,9 +135,9 @@ QList<RegistroFrequencia> FrequenciaRepository::doMes(int turmaId, int ano, int 
         "SELECT f.aluno_id, f.data, f.situacao, f.justificativa FROM frequencia f "
         "JOIN alunos a ON a.id = f.aluno_id "
         "WHERE a.turma_id = :turma AND f.data >= :de AND f.data <= :ate ORDER BY f.data"));
-    q.bindValue(QStringLiteral(":turma"), turmaId);
-    q.bindValue(QStringLiteral(":de"), inicio.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":ate"), inicio.addMonths(1).addDays(-1).toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":turma"), turmaId);
+    ligar(q, QStringLiteral(":de"), inicio.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":ate"), inicio.addMonths(1).addDays(-1).toString(Qt::ISODate));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -154,7 +154,7 @@ QList<RegistroFrequencia> FrequenciaRepository::doAluno(int alunoId)
     QSqlQuery q;
     q.prepare(QStringLiteral("SELECT aluno_id, data, situacao, justificativa FROM frequencia "
                              "WHERE aluno_id = :aluno ORDER BY data DESC"));
-    q.bindValue(QStringLiteral(":aluno"), alunoId);
+    ligar(q, QStringLiteral(":aluno"), alunoId);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();

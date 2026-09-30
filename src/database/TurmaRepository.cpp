@@ -1,4 +1,5 @@
 #include "database/TurmaRepository.h"
+#include "database/SqlUtil.h"
 
 #include <QSqlError>
 #include <QSqlQuery>
@@ -37,7 +38,7 @@ QList<Turma> TurmaRepository::listar(bool incluirArquivadas)
                              "WHERE (:todas = 1 OR t.arquivada = 0) "
                              "ORDER BY t.ano_letivo DESC, t.nome COLLATE NOCASE")
                   .arg(QLatin1String(COLUNAS)));
-    q.bindValue(QStringLiteral(":todas"), incluirArquivadas ? 1 : 0);
+    ligar(q, QStringLiteral(":todas"), incluirArquivadas ? 1 : 0);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -53,7 +54,7 @@ std::optional<Turma> TurmaRepository::buscar(int id)
     QSqlQuery q;
     q.prepare(QStringLiteral("SELECT %1 FROM turmas t WHERE t.id = :id")
                   .arg(QLatin1String(COLUNAS)));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -70,13 +71,13 @@ int TurmaRepository::inserir(const Turma &t)
     q.prepare(QStringLiteral(
         "INSERT INTO turmas (nome, disciplina, ano_letivo, periodo, sala, cor, arquivada) "
         "VALUES (:nome, :disciplina, :ano, :periodo, :sala, :cor, :arquivada)"));
-    q.bindValue(QStringLiteral(":nome"), t.nome);
-    q.bindValue(QStringLiteral(":disciplina"), t.disciplina);
-    q.bindValue(QStringLiteral(":ano"), t.anoLetivo);
-    q.bindValue(QStringLiteral(":periodo"), t.periodo);
-    q.bindValue(QStringLiteral(":sala"), t.sala);
-    q.bindValue(QStringLiteral(":cor"), t.cor);
-    q.bindValue(QStringLiteral(":arquivada"), t.arquivada ? 1 : 0);
+    ligar(q, QStringLiteral(":nome"), t.nome);
+    ligar(q, QStringLiteral(":disciplina"), t.disciplina);
+    ligar(q, QStringLiteral(":ano"), t.anoLetivo);
+    ligar(q, QStringLiteral(":periodo"), t.periodo);
+    ligar(q, QStringLiteral(":sala"), t.sala);
+    ligar(q, QStringLiteral(":cor"), t.cor);
+    ligar(q, QStringLiteral(":arquivada"), t.arquivada ? 1 : 0);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -92,14 +93,14 @@ bool TurmaRepository::atualizar(const Turma &t)
         "UPDATE turmas SET nome = :nome, disciplina = :disciplina, ano_letivo = :ano, "
         "periodo = :periodo, sala = :sala, cor = :cor, arquivada = :arquivada "
         "WHERE id = :id"));
-    q.bindValue(QStringLiteral(":nome"), t.nome);
-    q.bindValue(QStringLiteral(":disciplina"), t.disciplina);
-    q.bindValue(QStringLiteral(":ano"), t.anoLetivo);
-    q.bindValue(QStringLiteral(":periodo"), t.periodo);
-    q.bindValue(QStringLiteral(":sala"), t.sala);
-    q.bindValue(QStringLiteral(":cor"), t.cor);
-    q.bindValue(QStringLiteral(":arquivada"), t.arquivada ? 1 : 0);
-    q.bindValue(QStringLiteral(":id"), t.id);
+    ligar(q, QStringLiteral(":nome"), t.nome);
+    ligar(q, QStringLiteral(":disciplina"), t.disciplina);
+    ligar(q, QStringLiteral(":ano"), t.anoLetivo);
+    ligar(q, QStringLiteral(":periodo"), t.periodo);
+    ligar(q, QStringLiteral(":sala"), t.sala);
+    ligar(q, QStringLiteral(":cor"), t.cor);
+    ligar(q, QStringLiteral(":arquivada"), t.arquivada ? 1 : 0);
+    ligar(q, QStringLiteral(":id"), t.id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -112,7 +113,7 @@ bool TurmaRepository::remover(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM turmas WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();

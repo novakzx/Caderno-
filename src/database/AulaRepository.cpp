@@ -34,7 +34,7 @@ QList<Aula> AulaRepository::listar(int turmaId)
     q.prepare(QStringLiteral("%1WHERE t.arquivada = 0 AND (:turma = 0 OR a.turma_id = :turma) "
                              "ORDER BY a.data DESC, a.id DESC")
                   .arg(QLatin1String(SELECT_BASE)));
-    q.bindValue(QStringLiteral(":turma"), turmaId);
+    ligar(q, QStringLiteral(":turma"), turmaId);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -49,7 +49,7 @@ std::optional<Aula> AulaRepository::buscar(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("%1WHERE a.id = :id").arg(QLatin1String(SELECT_BASE)));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -66,12 +66,12 @@ int AulaRepository::inserir(const Aula &a)
     q.prepare(QStringLiteral(
         "INSERT INTO aulas (turma_id, data, tema, objetivos, materiais, observacoes) "
         "VALUES (:turma, :data, :tema, :obj, :mat, :obs)"));
-    q.bindValue(QStringLiteral(":turma"), a.turmaId);
-    q.bindValue(QStringLiteral(":data"), a.data.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":tema"), a.tema);
-    q.bindValue(QStringLiteral(":obj"), a.objetivos);
-    q.bindValue(QStringLiteral(":mat"), a.materiais);
-    q.bindValue(QStringLiteral(":obs"), a.observacoes);
+    ligar(q, QStringLiteral(":turma"), a.turmaId);
+    ligar(q, QStringLiteral(":data"), a.data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":tema"), a.tema);
+    ligar(q, QStringLiteral(":obj"), a.objetivos);
+    ligar(q, QStringLiteral(":mat"), a.materiais);
+    ligar(q, QStringLiteral(":obs"), a.observacoes);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -86,13 +86,13 @@ bool AulaRepository::atualizar(const Aula &a)
     q.prepare(QStringLiteral(
         "UPDATE aulas SET turma_id = :turma, data = :data, tema = :tema, objetivos = :obj, "
         "materiais = :mat, observacoes = :obs WHERE id = :id"));
-    q.bindValue(QStringLiteral(":turma"), a.turmaId);
-    q.bindValue(QStringLiteral(":data"), a.data.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":tema"), a.tema);
-    q.bindValue(QStringLiteral(":obj"), a.objetivos);
-    q.bindValue(QStringLiteral(":mat"), a.materiais);
-    q.bindValue(QStringLiteral(":obs"), a.observacoes);
-    q.bindValue(QStringLiteral(":id"), a.id);
+    ligar(q, QStringLiteral(":turma"), a.turmaId);
+    ligar(q, QStringLiteral(":data"), a.data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":tema"), a.tema);
+    ligar(q, QStringLiteral(":obj"), a.objetivos);
+    ligar(q, QStringLiteral(":mat"), a.materiais);
+    ligar(q, QStringLiteral(":obs"), a.observacoes);
+    ligar(q, QStringLiteral(":id"), a.id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -105,7 +105,7 @@ bool AulaRepository::remover(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM aulas WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();

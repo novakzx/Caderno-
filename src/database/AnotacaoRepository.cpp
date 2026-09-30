@@ -47,12 +47,12 @@ QList<AnotacaoResumo> AnotacaoRepository::listar(const Filtro &f, int limite)
         "                          WHERE x.anotacao_id = a.id AND g.nome = :tag)) "
         "AND (:texto = '' OR a.titulo LIKE :padrao OR a.conteudo_texto LIKE :padrao) "
         "ORDER BY a.atualizada_em DESC, a.id DESC LIMIT :limite"));
-    q.bindValue(QStringLiteral(":turma"), f.turmaId);
-    q.bindValue(QStringLiteral(":aluno"), f.alunoId);
-    q.bindValue(QStringLiteral(":tag"), f.tag);
-    q.bindValue(QStringLiteral(":texto"), f.texto.trimmed());
-    q.bindValue(QStringLiteral(":padrao"), QStringLiteral("%") + f.texto.trimmed() + QStringLiteral("%"));
-    q.bindValue(QStringLiteral(":limite"), limite);
+    ligar(q, QStringLiteral(":turma"), f.turmaId);
+    ligar(q, QStringLiteral(":aluno"), f.alunoId);
+    ligar(q, QStringLiteral(":tag"), f.tag);
+    ligar(q, QStringLiteral(":texto"), f.texto.trimmed());
+    ligar(q, QStringLiteral(":padrao"), QStringLiteral("%") + f.texto.trimmed() + QStringLiteral("%"));
+    ligar(q, QStringLiteral(":limite"), limite);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -79,7 +79,7 @@ std::optional<Anotacao> AnotacaoRepository::buscar(int id)
     q.prepare(QStringLiteral(
         "SELECT id, titulo, conteudo_html, conteudo_texto, COALESCE(turma_id, 0), COALESCE(aluno_id, 0), "
         "COALESCE(aula_id, 0), criada_em, atualizada_em FROM anotacoes WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -102,7 +102,7 @@ std::optional<Anotacao> AnotacaoRepository::buscar(int id)
     QSqlQuery qt;
     qt.prepare(QStringLiteral("SELECT g.nome FROM anotacao_tags x JOIN tags g ON g.id = x.tag_id "
                               "WHERE x.anotacao_id = :id ORDER BY g.nome COLLATE NOCASE"));
-    qt.bindValue(QStringLiteral(":id"), id);
+    ligar(qt, QStringLiteral(":id"), id);
     if (qt.exec()) {
         while (qt.next())
             a.tags.append(qt.value(0).toString());
@@ -120,12 +120,12 @@ int AnotacaoRepository::inserir(const Anotacao &a)
         "INSERT INTO anotacoes (titulo, conteudo_html, conteudo_texto, turma_id, aluno_id, aula_id, "
         "criada_em, atualizada_em) VALUES (:titulo, :html, :texto, :turma, :aluno, :aula, "
         "datetime('now', 'localtime'), datetime('now', 'localtime'))"));
-    q.bindValue(QStringLiteral(":titulo"), a.titulo);
-    q.bindValue(QStringLiteral(":html"), a.conteudoHtml);
-    q.bindValue(QStringLiteral(":texto"), a.conteudoTexto);
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(a.turmaId));
-    q.bindValue(QStringLiteral(":aluno"), nuloSeZero(a.alunoId));
-    q.bindValue(QStringLiteral(":aula"), nuloSeZero(a.aulaId));
+    ligar(q, QStringLiteral(":titulo"), a.titulo);
+    ligar(q, QStringLiteral(":html"), a.conteudoHtml);
+    ligar(q, QStringLiteral(":texto"), a.conteudoTexto);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(a.turmaId));
+    ligar(q, QStringLiteral(":aluno"), nuloSeZero(a.alunoId));
+    ligar(q, QStringLiteral(":aula"), nuloSeZero(a.aulaId));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -154,13 +154,13 @@ bool AnotacaoRepository::atualizar(const Anotacao &a)
         "UPDATE anotacoes SET titulo = :titulo, conteudo_html = :html, conteudo_texto = :texto, "
         "turma_id = :turma, aluno_id = :aluno, aula_id = :aula, "
         "atualizada_em = datetime('now', 'localtime') WHERE id = :id"));
-    q.bindValue(QStringLiteral(":titulo"), a.titulo);
-    q.bindValue(QStringLiteral(":html"), a.conteudoHtml);
-    q.bindValue(QStringLiteral(":texto"), a.conteudoTexto);
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(a.turmaId));
-    q.bindValue(QStringLiteral(":aluno"), nuloSeZero(a.alunoId));
-    q.bindValue(QStringLiteral(":aula"), nuloSeZero(a.aulaId));
-    q.bindValue(QStringLiteral(":id"), a.id);
+    ligar(q, QStringLiteral(":titulo"), a.titulo);
+    ligar(q, QStringLiteral(":html"), a.conteudoHtml);
+    ligar(q, QStringLiteral(":texto"), a.conteudoTexto);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(a.turmaId));
+    ligar(q, QStringLiteral(":aluno"), nuloSeZero(a.alunoId));
+    ligar(q, QStringLiteral(":aula"), nuloSeZero(a.aulaId));
+    ligar(q, QStringLiteral(":id"), a.id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -185,7 +185,7 @@ bool AnotacaoRepository::remover(int id)
 
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM anotacoes WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
     if (!q.exec()) {
         m_erro = q.lastError().text();
         db.rollback();
@@ -215,7 +215,7 @@ bool AnotacaoRepository::definirTags(int anotacaoId, const QStringList &tags)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM anotacao_tags WHERE anotacao_id = :id"));
-    q.bindValue(QStringLiteral(":id"), anotacaoId);
+    ligar(q, QStringLiteral(":id"), anotacaoId);
     if (!q.exec()) {
         m_erro = q.lastError().text();
         return false;
@@ -224,7 +224,7 @@ bool AnotacaoRepository::definirTags(int anotacaoId, const QStringList &tags)
     for (const QString &tag : normalizarTags(tags)) {
         QSqlQuery inserir;
         inserir.prepare(QStringLiteral("INSERT OR IGNORE INTO tags (nome) VALUES (:nome)"));
-        inserir.bindValue(QStringLiteral(":nome"), tag);
+        ligar(inserir, QStringLiteral(":nome"), tag);
         if (!inserir.exec()) {
             m_erro = inserir.lastError().text();
             return false;
@@ -235,8 +235,8 @@ bool AnotacaoRepository::definirTags(int anotacaoId, const QStringList &tags)
         vincular.prepare(QStringLiteral(
             "INSERT OR IGNORE INTO anotacao_tags (anotacao_id, tag_id) "
             "SELECT :anot, id FROM tags WHERE nome = :nome"));
-        vincular.bindValue(QStringLiteral(":anot"), anotacaoId);
-        vincular.bindValue(QStringLiteral(":nome"), tag);
+        ligar(vincular, QStringLiteral(":anot"), anotacaoId);
+        ligar(vincular, QStringLiteral(":nome"), tag);
         if (!vincular.exec()) {
             m_erro = vincular.lastError().text();
             return false;

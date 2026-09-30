@@ -1,4 +1,5 @@
 #include "database/HorarioRepository.h"
+#include "database/SqlUtil.h"
 
 #include <QSqlError>
 #include <QSqlQuery>
@@ -47,7 +48,7 @@ std::optional<Horario> HorarioRepository::buscar(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("%1WHERE h.id = :id").arg(QLatin1String(SELECT_BASE)));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -64,11 +65,11 @@ int HorarioRepository::inserir(const Horario &h)
     q.prepare(QStringLiteral(
         "INSERT INTO horarios (turma_id, dia_semana, hora_inicio, hora_fim, sala) "
         "VALUES (:turma, :dia, :inicio, :fim, :sala)"));
-    q.bindValue(QStringLiteral(":turma"), h.turmaId);
-    q.bindValue(QStringLiteral(":dia"), h.diaSemana);
-    q.bindValue(QStringLiteral(":inicio"), h.inicio.toString(QLatin1String(FORMATO_HORA)));
-    q.bindValue(QStringLiteral(":fim"), h.fim.toString(QLatin1String(FORMATO_HORA)));
-    q.bindValue(QStringLiteral(":sala"), h.sala);
+    ligar(q, QStringLiteral(":turma"), h.turmaId);
+    ligar(q, QStringLiteral(":dia"), h.diaSemana);
+    ligar(q, QStringLiteral(":inicio"), h.inicio.toString(QLatin1String(FORMATO_HORA)));
+    ligar(q, QStringLiteral(":fim"), h.fim.toString(QLatin1String(FORMATO_HORA)));
+    ligar(q, QStringLiteral(":sala"), h.sala);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -83,12 +84,12 @@ bool HorarioRepository::atualizar(const Horario &h)
     q.prepare(QStringLiteral(
         "UPDATE horarios SET turma_id = :turma, dia_semana = :dia, hora_inicio = :inicio, "
         "hora_fim = :fim, sala = :sala WHERE id = :id"));
-    q.bindValue(QStringLiteral(":turma"), h.turmaId);
-    q.bindValue(QStringLiteral(":dia"), h.diaSemana);
-    q.bindValue(QStringLiteral(":inicio"), h.inicio.toString(QLatin1String(FORMATO_HORA)));
-    q.bindValue(QStringLiteral(":fim"), h.fim.toString(QLatin1String(FORMATO_HORA)));
-    q.bindValue(QStringLiteral(":sala"), h.sala);
-    q.bindValue(QStringLiteral(":id"), h.id);
+    ligar(q, QStringLiteral(":turma"), h.turmaId);
+    ligar(q, QStringLiteral(":dia"), h.diaSemana);
+    ligar(q, QStringLiteral(":inicio"), h.inicio.toString(QLatin1String(FORMATO_HORA)));
+    ligar(q, QStringLiteral(":fim"), h.fim.toString(QLatin1String(FORMATO_HORA)));
+    ligar(q, QStringLiteral(":sala"), h.sala);
+    ligar(q, QStringLiteral(":id"), h.id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -101,7 +102,7 @@ bool HorarioRepository::remover(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM horarios WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -119,10 +120,10 @@ bool HorarioRepository::temConflito(int diaSemana, const QTime &inicio, const QT
         "SELECT COUNT(*) FROM horarios h JOIN turmas t ON t.id = h.turma_id "
         "WHERE t.arquivada = 0 AND h.dia_semana = :dia AND h.id <> :ignorar "
         "AND h.hora_inicio < :fim AND :inicio < h.hora_fim"));
-    q.bindValue(QStringLiteral(":dia"), diaSemana);
-    q.bindValue(QStringLiteral(":ignorar"), ignorarId);
-    q.bindValue(QStringLiteral(":inicio"), inicio.toString(QLatin1String(FORMATO_HORA)));
-    q.bindValue(QStringLiteral(":fim"), fim.toString(QLatin1String(FORMATO_HORA)));
+    ligar(q, QStringLiteral(":dia"), diaSemana);
+    ligar(q, QStringLiteral(":ignorar"), ignorarId);
+    ligar(q, QStringLiteral(":inicio"), inicio.toString(QLatin1String(FORMATO_HORA)));
+    ligar(q, QStringLiteral(":fim"), fim.toString(QLatin1String(FORMATO_HORA)));
 
     if (!q.exec() || !q.next()) {
         m_erro = q.lastError().text();

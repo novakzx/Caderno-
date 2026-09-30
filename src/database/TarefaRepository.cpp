@@ -36,8 +36,8 @@ QList<Tarefa> TarefaRepository::consultar(const QString &where,
     q.prepare(QStringLiteral("%1WHERE %2 ORDER BY %3 LIMIT :limite")
                   .arg(QLatin1String(SELECT_BASE), where, ordem));
     for (const auto &p : parametros)
-        q.bindValue(p.first, p.second);
-    q.bindValue(QStringLiteral(":limite"), limite);
+        ligar(q, p.first, p.second);
+    ligar(q, QStringLiteral(":limite"), limite);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -85,12 +85,12 @@ int TarefaRepository::inserir(const Tarefa &t)
     q.prepare(QStringLiteral(
         "INSERT INTO tarefas (turma_id, titulo, descricao, data_entrega, concluida, prioridade) "
         "VALUES (:turma, :titulo, :descricao, :entrega, :concluida, :prioridade)"));
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(t.turmaId));  // 0 = sem turma -> NULL
-    q.bindValue(QStringLiteral(":titulo"), t.titulo);
-    q.bindValue(QStringLiteral(":descricao"), t.descricao);
-    q.bindValue(QStringLiteral(":entrega"), dataOuNulo(t.dataEntrega));
-    q.bindValue(QStringLiteral(":concluida"), t.concluida ? 1 : 0);
-    q.bindValue(QStringLiteral(":prioridade"), t.prioridade);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(t.turmaId));  // 0 = sem turma -> NULL
+    ligar(q, QStringLiteral(":titulo"), t.titulo);
+    ligar(q, QStringLiteral(":descricao"), t.descricao);
+    ligar(q, QStringLiteral(":entrega"), dataOuNulo(t.dataEntrega));
+    ligar(q, QStringLiteral(":concluida"), t.concluida ? 1 : 0);
+    ligar(q, QStringLiteral(":prioridade"), t.prioridade);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -105,13 +105,13 @@ bool TarefaRepository::atualizar(const Tarefa &t)
     q.prepare(QStringLiteral(
         "UPDATE tarefas SET turma_id = :turma, titulo = :titulo, descricao = :descricao, "
         "data_entrega = :entrega, concluida = :concluida, prioridade = :prioridade WHERE id = :id"));
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(t.turmaId));
-    q.bindValue(QStringLiteral(":titulo"), t.titulo);
-    q.bindValue(QStringLiteral(":descricao"), t.descricao);
-    q.bindValue(QStringLiteral(":entrega"), dataOuNulo(t.dataEntrega));
-    q.bindValue(QStringLiteral(":concluida"), t.concluida ? 1 : 0);
-    q.bindValue(QStringLiteral(":prioridade"), t.prioridade);
-    q.bindValue(QStringLiteral(":id"), t.id);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(t.turmaId));
+    ligar(q, QStringLiteral(":titulo"), t.titulo);
+    ligar(q, QStringLiteral(":descricao"), t.descricao);
+    ligar(q, QStringLiteral(":entrega"), dataOuNulo(t.dataEntrega));
+    ligar(q, QStringLiteral(":concluida"), t.concluida ? 1 : 0);
+    ligar(q, QStringLiteral(":prioridade"), t.prioridade);
+    ligar(q, QStringLiteral(":id"), t.id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -124,8 +124,8 @@ bool TarefaRepository::marcarConcluida(int id, bool concluida)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("UPDATE tarefas SET concluida = :c WHERE id = :id"));
-    q.bindValue(QStringLiteral(":c"), concluida ? 1 : 0);
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":c"), concluida ? 1 : 0);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -138,7 +138,7 @@ bool TarefaRepository::remover(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM tarefas WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();

@@ -86,9 +86,15 @@ jobs:
           } else {
             $texto = "O autoteste nao gerou relatorio (codigo de saida $($p.ExitCode))."
           }
-          Write-Host $texto
+          # Resumo curto: só o que NÃO está "OK" (cabeçalho, falhas, variantes e resultado).
+          # O relatório completo continua no artefato (autoteste.txt).
+          $linhas = $texto -split "`r?`n"
+          $totalOk = ($linhas | Where-Object { $_ -match '^\s+OK\s' }).Count
+          $compacto = (($linhas | Where-Object { $_ -notmatch '^\s+OK\s' }) -join "`n").Trim()
+          $compacto = "$compacto`n($totalOk verificacoes OK; relatorio completo no artefato)"
+          Write-Host $compacto
           # Comandos de workflow: % vira %25 e quebra de linha vira %0A.
-          $anotacao = ($texto -replace "%", "%25") -replace "`r", "" -replace "`n", "%0A"
+          $anotacao = ($compacto -replace "%", "%25") -replace "`r", "" -replace "`n", "%0A"
           if ($p.ExitCode -ne 0) {
             Write-Host "::error title=Autoteste falhou::$anotacao"
             exit 1

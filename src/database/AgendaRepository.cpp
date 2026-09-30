@@ -1,4 +1,5 @@
 #include "database/AgendaRepository.h"
+#include "database/SqlUtil.h"
 
 #include <QSqlError>
 #include <QSqlQuery>
@@ -15,8 +16,8 @@ QList<AgendaRepository::AulaDoDia> AgendaRepository::aulasDoDia(const QDate &dat
         "FROM horarios h JOIN turmas t ON t.id = h.turma_id "
         "WHERE t.arquivada = 0 AND h.dia_semana = :dia "
         "ORDER BY h.hora_inicio"));
-    q.bindValue(QStringLiteral(":data"), data.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":dia"), data.dayOfWeek());  // 1 = segunda ... 7 = domingo
+    ligar(q, QStringLiteral(":data"), data.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":dia"), data.dayOfWeek());  // 1 = segunda ... 7 = domingo
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -46,8 +47,8 @@ QList<AgendaRepository::AvaliacaoDatada> AgendaRepository::avaliacoesDatadas(con
     q.prepare(QStringLiteral(
         "SELECT a.data, a.nome, a.tipo, t.nome, t.cor FROM avaliacoes a JOIN turmas t ON t.id = a.turma_id "
         "WHERE t.arquivada = 0 AND a.data IS NOT NULL AND a.data BETWEEN :de AND :ate ORDER BY a.data, a.id"));
-    q.bindValue(QStringLiteral(":de"), de.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":ate"), ate.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":de"), de.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":ate"), ate.toString(Qt::ISODate));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -80,8 +81,8 @@ QList<AgendaRepository::ProvaProxima> AgendaRepository::provasProximas(const QDa
         "FROM avaliacoes a JOIN turmas t ON t.id = a.turma_id "
         "WHERE a.tipo = 'prova' AND t.arquivada = 0 AND a.data BETWEEN :de AND :ate "
         "ORDER BY 1, 3"));
-    q.bindValue(QStringLiteral(":de"), desde.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":ate"), desde.addDays(dias).toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":de"), desde.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":ate"), desde.addDays(dias).toString(Qt::ISODate));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();

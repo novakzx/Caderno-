@@ -1,4 +1,5 @@
 #include "database/NotaRepository.h"
+#include "database/SqlUtil.h"
 
 #include <QSqlError>
 #include <QSqlQuery>
@@ -11,7 +12,7 @@ QHash<qint64, double> NotaRepository::listarPorTurma(int turmaId)
         "SELECT n.avaliacao_id, n.aluno_id, n.valor FROM notas n "
         "JOIN avaliacoes a ON a.id = n.avaliacao_id "
         "WHERE a.turma_id = :turma AND n.valor IS NOT NULL"));
-    q.bindValue(QStringLiteral(":turma"), turmaId);
+    ligar(q, QStringLiteral(":turma"), turmaId);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -28,16 +29,16 @@ bool NotaRepository::salvar(int avaliacaoId, int alunoId, std::optional<double> 
     if (!valor) {
         // Célula esvaziada: remove a linha em vez de guardar NULL.
         q.prepare(QStringLiteral("DELETE FROM notas WHERE avaliacao_id = :av AND aluno_id = :al"));
-        q.bindValue(QStringLiteral(":av"), avaliacaoId);
-        q.bindValue(QStringLiteral(":al"), alunoId);
+        ligar(q, QStringLiteral(":av"), avaliacaoId);
+        ligar(q, QStringLiteral(":al"), alunoId);
     } else {
         // UPSERT: usa a restrição UNIQUE (avaliacao_id, aluno_id) da tabela.
         q.prepare(QStringLiteral(
             "INSERT INTO notas (avaliacao_id, aluno_id, valor) VALUES (:av, :al, :valor) "
             "ON CONFLICT (avaliacao_id, aluno_id) DO UPDATE SET valor = excluded.valor"));
-        q.bindValue(QStringLiteral(":av"), avaliacaoId);
-        q.bindValue(QStringLiteral(":al"), alunoId);
-        q.bindValue(QStringLiteral(":valor"), *valor);
+        ligar(q, QStringLiteral(":av"), avaliacaoId);
+        ligar(q, QStringLiteral(":al"), alunoId);
+        ligar(q, QStringLiteral(":valor"), *valor);
     }
 
     if (!q.exec()) {
@@ -51,8 +52,8 @@ int NotaRepository::contarAcima(int avaliacaoId, double limite)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("SELECT COUNT(*) FROM notas WHERE avaliacao_id = :av AND valor > :lim"));
-    q.bindValue(QStringLiteral(":av"), avaliacaoId);
-    q.bindValue(QStringLiteral(":lim"), limite);
+    ligar(q, QStringLiteral(":av"), avaliacaoId);
+    ligar(q, QStringLiteral(":lim"), limite);
 
     if (!q.exec() || !q.next()) {
         m_erro = q.lastError().text();

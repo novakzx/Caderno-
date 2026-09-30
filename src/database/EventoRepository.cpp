@@ -40,8 +40,8 @@ QList<Evento> EventoRepository::listarPeriodo(const QDate &de, const QDate &ate)
         "AND COALESCE(NULLIF(substr(e.data_fim, 1, 10), ''), substr(e.data_inicio, 1, 10)) >= :de "
         "ORDER BY e.data_inicio, e.id")
                   .arg(QLatin1String(SELECT_BASE)));
-    q.bindValue(QStringLiteral(":de"), de.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":ate"), ate.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":de"), de.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":ate"), ate.toString(Qt::ISODate));
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -56,7 +56,7 @@ std::optional<Evento> EventoRepository::buscar(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("%1WHERE e.id = :id").arg(QLatin1String(SELECT_BASE)));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -73,12 +73,12 @@ int EventoRepository::inserir(const Evento &e)
     q.prepare(QStringLiteral(
         "INSERT INTO eventos (turma_id, titulo, tipo, data_inicio, data_fim, descricao) "
         "VALUES (:turma, :titulo, :tipo, :inicio, :fim, :descricao)"));
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(e.turmaId));
-    q.bindValue(QStringLiteral(":titulo"), e.titulo);
-    q.bindValue(QStringLiteral(":tipo"), e.tipo);
-    q.bindValue(QStringLiteral(":inicio"), e.dataInicio.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":fim"), dataOuNulo(e.dataFim));
-    q.bindValue(QStringLiteral(":descricao"), e.descricao);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(e.turmaId));
+    ligar(q, QStringLiteral(":titulo"), e.titulo);
+    ligar(q, QStringLiteral(":tipo"), e.tipo);
+    ligar(q, QStringLiteral(":inicio"), e.dataInicio.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":fim"), dataOuNulo(e.dataFim));
+    ligar(q, QStringLiteral(":descricao"), e.descricao);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -93,13 +93,13 @@ bool EventoRepository::atualizar(const Evento &e)
     q.prepare(QStringLiteral(
         "UPDATE eventos SET turma_id = :turma, titulo = :titulo, tipo = :tipo, data_inicio = :inicio, "
         "data_fim = :fim, descricao = :descricao WHERE id = :id"));
-    q.bindValue(QStringLiteral(":turma"), nuloSeZero(e.turmaId));
-    q.bindValue(QStringLiteral(":titulo"), e.titulo);
-    q.bindValue(QStringLiteral(":tipo"), e.tipo);
-    q.bindValue(QStringLiteral(":inicio"), e.dataInicio.toString(Qt::ISODate));
-    q.bindValue(QStringLiteral(":fim"), dataOuNulo(e.dataFim));
-    q.bindValue(QStringLiteral(":descricao"), e.descricao);
-    q.bindValue(QStringLiteral(":id"), e.id);
+    ligar(q, QStringLiteral(":turma"), nuloSeZero(e.turmaId));
+    ligar(q, QStringLiteral(":titulo"), e.titulo);
+    ligar(q, QStringLiteral(":tipo"), e.tipo);
+    ligar(q, QStringLiteral(":inicio"), e.dataInicio.toString(Qt::ISODate));
+    ligar(q, QStringLiteral(":fim"), dataOuNulo(e.dataFim));
+    ligar(q, QStringLiteral(":descricao"), e.descricao);
+    ligar(q, QStringLiteral(":id"), e.id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
@@ -112,7 +112,7 @@ bool EventoRepository::remover(int id)
 {
     QSqlQuery q;
     q.prepare(QStringLiteral("DELETE FROM eventos WHERE id = :id"));
-    q.bindValue(QStringLiteral(":id"), id);
+    ligar(q, QStringLiteral(":id"), id);
 
     if (!q.exec()) {
         m_erro = q.lastError().text();
