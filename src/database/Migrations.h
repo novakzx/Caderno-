@@ -33,4 +33,8 @@ bool aplicar(QSqlDatabase &db, QString *erro);
 // Versão do esquema gravada no banco (0 = banco novo).
 int versaoAtual(QSqlDatabase &db);
 
+// Executa um comando SQL (sem parâmetros) e o encerra por completo, lendo e
+// descartando qualquer linha de resultado. Use para PRAGMAs e comandos soltos.
+bool executarComando(QSqlDatabase &db, const QString &sql, QString *erro);
+
 }  // namespace Migrations

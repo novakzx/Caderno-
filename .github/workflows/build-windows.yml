@@ -35,7 +35,10 @@ jobs:
           cache: true
 
       - name: Configurar (CMake)
-        run: cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=OFF
+        shell: pwsh
+        run: |
+          $curto = $env:GITHUB_SHA.Substring(0, 7)
+          cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=OFF "-DPROFORG_BUILD_ID=$curto"
 
       - name: Compilar
         run: cmake --build build --config Release --parallel
@@ -54,9 +57,18 @@ jobs:
           Get-ChildItem dist/ProfOrganizer -Recurse | Measure-Object Length -Sum |
             ForEach-Object { "{0} arquivos, {1:N1} MB" -f $_.Count, ($_.Sum / 1MB) }
 
+      # O nome inclui o número da execução e o início do commit, para nunca confundir
+      # o .exe novo com um antigo. O mesmo identificador aparece na barra de título do app.
+      - name: Nome do pacote
+        id: nome
+        shell: pwsh
+        run: |
+          $curto = $env:GITHUB_SHA.Substring(0, 7)
+          "pacote=ProfOrganizer-build-$($env:GITHUB_RUN_NUMBER)-$curto" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
       - name: Publicar o resultado
         uses: actions/upload-artifact@v4
         with:
-          name: ProfOrganizer-windows
+          name: ${{ steps.nome.outputs.pacote }}
           path: dist/ProfOrganizer
           if-no-files-found: error

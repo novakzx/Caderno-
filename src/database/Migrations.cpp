@@ -242,13 +242,95 @@ const QList<Migracao> &todas()
     return lista;
 }
 
+// Executa UM comando SQL numa consulta própria e a encerra por completo.
+//
+// Por que tanto cuidado: o SQLite recusa o COMMIT ("cannot commit transaction -
+// SQL statements in progress") se ainda houver um comando "em andamento" na
+// conexão. Um comando que devolve linhas (SELECT, PRAGMA journal_mode...) só
+// termina depois de lido até o fim ou "resetado". Aqui cada comando tem a sua
+// QSqlQuery, que é lida até o fim, finalizada e destruída antes do próximo.
+bool executarComando(QSqlDatabase &db, const QString &sql, QString *erro)
+{
+    QSqlQuery q(db);
+    const bool ok = q.exec(sql);
+    if (!ok) {
+        if (erro)
+            *erro = q.lastError().text();
+        return false;
+    }
+    while (q.isSelect() && q.next()) {
+        // descarta as linhas de resultado, se houver
+    }
+    q.finish();
+    return true;
+}
+
+namespace {
+
+// Texto curto para acompanhar mensagens de erro: ajuda a diagnosticar problemas
+// que só acontecem em alguns computadores.
+QString diagnostico(QSqlDatabase &db)
+{
+    QString versao = QStringLiteral("?"), modo = QStringLiteral("?");
+    {
+        QSqlQuery q(db);
+        if (q.exec(QStringLiteral("SELECT sqlite_version()")) && q.next())
+            versao = q.value(0).toString();
+        q.finish();
+    }
+    {
+        QSqlQuery q(db);
+        if (q.exec(QStringLiteral("PRAGMA journal_mode")) && q.next())
+            modo = q.value(0).toString();
+        q.finish();
+    }
+    return QStringLiteral(" [SQLite %1, journal_mode=%2]").arg(versao, modo);
+}
+
+// Aplica UMA migração dentro de uma transação explícita (BEGIN ... COMMIT).
+bool aplicarUma(QSqlDatabase &db, const Migracao &m, QString *erro)
+{
+    QString detalhe;
+    if (!executarComando(db, QStringLiteral("BEGIN IMMEDIATE"), &detalhe)) {
+        if (erro)
+            *erro = QStringLiteral("Não foi possível iniciar a migração %1: %2").arg(m.versao).arg(detalhe);
+        return false;
+    }
+
+    auto desfazer = [&](const QString &motivo) {
+        executarComando(db, QStringLiteral("ROLLBACK"), nullptr);
+        if (erro)
+            *erro = motivo;
+        return false;
+    };
+
+    for (const QString &sql : m.comandos) {
+        if (!executarComando(db, sql, &detalhe))
+            return desfazer(QStringLiteral("Migração %1 (%2) falhou: %3").arg(m.versao).arg(m.descricao, detalhe));
+    }
+
+    // PRAGMA user_version é transacional no SQLite: só vale se tudo deu certo.
+    // (PRAGMA não aceita parâmetros, por isso o número é montado no texto;
+    // ele vem do nosso código, não do usuário.)
+    if (!executarComando(db, QStringLiteral("PRAGMA user_version = %1").arg(m.versao), &detalhe))
+        return desfazer(QStringLiteral("Não foi possível gravar a versão %1: %2").arg(m.versao).arg(detalhe));
+
+    if (!executarComando(db, QStringLiteral("COMMIT"), &detalhe))
+        return desfazer(QStringLiteral("Não foi possível concluir a migração %1: %2%3")
+                            .arg(m.versao)
+                            .arg(detalhe, diagnostico(db)));
+    return true;
+}
+
+}  // namespace
+
 int versaoAtual(QSqlDatabase &db)
 {
     QSqlQuery q(db);
     int versao = 0;
     if (q.exec(QStringLiteral("PRAGMA user_version")) && q.next())
         versao = q.value(0).toInt();
-    q.finish();  // não deixa a consulta aberta
+    q.finish();
     return versao;
 }
 
@@ -259,46 +341,8 @@ bool aplicar(QSqlDatabase &db, QString *erro)
     for (const Migracao &m : todas()) {
         if (m.versao <= atual)
             continue;
-
-        if (!db.transaction()) {
-            if (erro) *erro = db.lastError().text();
+        if (!aplicarUma(db, m, erro))
             return false;
-        }
-
-        QSqlQuery q(db);
-        bool ok = true;
-        for (const QString &sql : m.comandos) {
-            if (!q.exec(sql)) {
-                if (erro)
-                    *erro = QStringLiteral("Migração %1 (%2) falhou: %3")
-                                .arg(m.versao)
-                                .arg(m.descricao, q.lastError().text());
-                ok = false;
-                break;
-            }
-        }
-
-        // PRAGMA user_version é transacional no SQLite: só vale se tudo deu certo.
-        // (PRAGMA não aceita parâmetros, por isso o número é montado no texto;
-        // ele vem do nosso código, não do usuário.)
-        if (ok && !q.exec(QStringLiteral("PRAGMA user_version = %1").arg(m.versao))) {
-            if (erro) *erro = q.lastError().text();
-            ok = false;
-        }
-
-        // Encerra a consulta ANTES do commit/rollback: o SQLite recusa o COMMIT
-        // ("SQL statements in progress") se ainda houver uma consulta aberta.
-        q.finish();
-
-        if (!ok) {
-            db.rollback();
-            return false;
-        }
-        if (!db.commit()) {
-            if (erro) *erro = db.lastError().text();
-            db.rollback();  // não deixa a transação pendurada
-            return false;
-        }
     }
     return true;
 }

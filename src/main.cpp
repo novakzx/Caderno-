@@ -13,11 +13,13 @@
 #include "database/Repositorios.h"
 #include "database/TarefaRepository.h"
 #include "database/TurmaRepository.h"
+#include "core/BuildInfo.h"
 #include "services/BackupService.h"
 #include "ui/MainWindow.h"
 #include "ui/ThemeManager.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QMessageBox>
 
 int main(int argc, char *argv[])
@@ -51,8 +53,10 @@ int main(int argc, char *argv[])
     DatabaseManager banco;
     if (!banco.abrir(caminhoBanco)) {
         QMessageBox::critical(nullptr, QStringLiteral("Erro no banco de dados"),
-                              QStringLiteral("Não foi possível abrir o banco de dados:\n\n%1")
-                                  .arg(banco.ultimoErro()));
+                              QStringLiteral("Não foi possível abrir o banco de dados:\n\n%1\n\n"
+                                             "Versão: %2\nArquivo: %3")
+                                  .arg(banco.ultimoErro(), identificacaoDoBuild(),
+                                       QDir::toNativeSeparators(caminhoBanco)));
         return 1;
     }
 

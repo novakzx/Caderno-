@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 
+#include "core/BuildInfo.h"
 #include "database/Repositorios.h"
 #include "services/BackupService.h"
 #include "ui/AnexosWidget.h"
@@ -37,7 +38,7 @@ constexpr int kIntervaloBackupAoFecharHoras = 12;                            // 
 
 MainWindow::MainWindow(Repositorios &repos, QWidget *parent) : QMainWindow(parent), m_repos(repos)
 {
-    setWindowTitle(QStringLiteral("Professor Organizado"));
+    setWindowTitle(QStringLiteral("Professor Organizado — %1").arg(identificacaoDoBuild()));
     resize(1280, 820);
     setMinimumSize(1000, 680);
 

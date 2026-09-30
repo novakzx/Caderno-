@@ -47,6 +47,14 @@ qt_add_executable(ProfOrganizer WIN32 MACOSX_BUNDLE ${SOURCES})
 target_include_directories(ProfOrganizer PRIVATE src)
 target_link_libraries(ProfOrganizer PRIVATE Qt6::Widgets Qt6::Sql QXlsx::QXlsx)
 
+# Identificação do build (início do hash do commit), passada pelo workflow:
+#   cmake ... -DPROFORG_BUILD_ID=6d9e0f0
+# Aparece na barra de título e nas mensagens de erro (src/core/BuildInfo.h).
+set(PROFORG_BUILD_ID "" CACHE STRING "Identificação do build (hash curto do commit)")
+if(PROFORG_BUILD_ID)
+    target_compile_definitions(ProfOrganizer PRIVATE PROFORG_BUILD_ID_RAW=${PROFORG_BUILD_ID})
+endif()
+
 # --- Testes (sem Qt): ctest --test-dir build ------------------------------------
 enable_testing()
 foreach(nome media horario frequencia)

@@ -49,7 +49,7 @@ testes e gera uma pasta pronta para usar. Passo a passo:
    ```
 2. No GitHub, abra a aba **Actions** → **Build Windows**. O build roda sozinho (leva ~10–15 min na primeira vez).
 3. Se der **erro de compilação**, abra o passo "Compilar", copie as linhas com `error` e me mande.
-4. Se der certo, role até **Artifacts** no fim da página da execução e baixe **ProfOrganizer-windows**.
+4. Se der certo, role até **Artifacts** no fim da página da execução e baixe **ProfOrganizer-build-N-xxxxxxx** (N = número da execução, xxxxxxx = início do commit; o mesmo código aparece na barra de título do app).
 5. Descompacte o `.zip` em qualquer pasta e execute `ProfOrganizer.exe` (não precisa instalar o Qt).
 
 ### Testes
