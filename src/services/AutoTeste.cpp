@@ -26,26 +26,45 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QTemporaryDir>
-#include <QTextStream>
 #include <QUuid>
 
 namespace AutoTeste {
 
 namespace {
 
+// O relatório é gravado linha a linha, com flush a cada uma: se o programa travar
+// no meio, o que já foi verificado continua no arquivo e dá para ver onde parou.
 struct Relatorio {
-    QStringList linhas;
+    QFile arquivo;
     int falhas = 0;
 
-    void titulo(const QString &t) { linhas << QString() << QStringLiteral("== %1 ==").arg(t); }
-    void info(const QString &t) { linhas << QStringLiteral("   ") + t; }
+    explicit Relatorio(const QString &caminho)
+    {
+        arquivo.setFileName(caminho);
+        arquivo.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    }
+
+    void linha(const QString &t)
+    {
+        if (arquivo.isOpen()) {
+            arquivo.write(t.toUtf8());
+            arquivo.write("\n");
+            arquivo.flush();
+        }
+    }
+    void titulo(const QString &t)
+    {
+        linha(QString());
+        linha(QStringLiteral("== %1 ==").arg(t));
+    }
+    void info(const QString &t) { linha(QStringLiteral("   ") + t); }
     void verificar(const QString &nome, bool condicao, const QString &detalhe = QString())
     {
         if (condicao) {
-            linhas << QStringLiteral("  OK      %1").arg(nome);
+            linha(QStringLiteral("  OK      %1").arg(nome));
         } else {
             ++falhas;
-            linhas << QStringLiteral("  FALHOU  %1%2").arg(nome, detalhe.isEmpty() ? QString() : QStringLiteral(" -> ") + detalhe);
+            linha(QStringLiteral("  FALHOU  %1%2").arg(nome, detalhe.isEmpty() ? QString() : QStringLiteral(" -> ") + detalhe));
         }
     }
 };
@@ -191,7 +210,7 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     const int avId2 = avaliacoes.inserir(av);
     r.verificar(QStringLiteral("AvaliacaoRepository::mover"), avaliacoes.mover(avId2, -1), avaliacoes.ultimoErro());
     r.verificar(QStringLiteral("AvaliacaoRepository::listarPorTurma (ordem após mover)"),
-                avaliacoes.listarPorTurma(turmaId, 0).first().id == avId2);
+                avaliacoes.listarPorTurma(turmaId, 0).value(0).id == avId2);  // value(): seguro se a lista vier vazia
 
     r.verificar(QStringLiteral("NotaRepository::salvar"), notas.salvar(avId, alunoId, 8.5), notas.ultimoErro());
     r.verificar(QStringLiteral("NotaRepository::salvar (atualizar)"), notas.salvar(avId, alunoId, 9.0), notas.ultimoErro());
@@ -332,9 +351,10 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
 
 int executar(const QString &arquivoSaida)
 {
-    Relatorio r;
-    r.linhas << QStringLiteral("Autoteste do Professor Organizado") << QStringLiteral("Versão: %1").arg(identificacaoDoBuild())
-             << QStringLiteral("Qt: %1 (compilado com %2)").arg(QString::fromLatin1(qVersion()), QStringLiteral(QT_VERSION_STR));
+    Relatorio r(arquivoSaida);
+    r.linha(QStringLiteral("Autoteste do Professor Organizado"));
+    r.linha(QStringLiteral("Versão: %1").arg(identificacaoDoBuild()));
+    r.linha(QStringLiteral("Qt: %1 (compilado com %2)").arg(QString::fromLatin1(qVersion()), QStringLiteral(QT_VERSION_STR)));
 
     QTemporaryDir pasta;
     if (!pasta.isValid()) {
@@ -342,6 +362,7 @@ int executar(const QString &arquivoSaida)
     } else {
         // 1) O caminho real do programa: DatabaseManager::abrir (PRAGMAs + migrações).
         r.titulo(QStringLiteral("Abertura do banco (DatabaseManager::abrir)"));
+        r.info(QStringLiteral("pasta temporária: %1").arg(pasta.path()));
         DatabaseManager banco;
         const bool abriu = banco.abrir(pasta.path() + QStringLiteral("/professor.db"));
         r.verificar(QStringLiteral("DatabaseManager::abrir"), abriu, banco.ultimoErro());
@@ -371,13 +392,10 @@ int executar(const QString &arquivoSaida)
         QSqlDatabase::removeDatabase(QSqlDatabase::defaultConnection);
     }
 
-    r.linhas << QString() << (r.falhas == 0 ? QStringLiteral("RESULTADO: tudo certo.")
-                                            : QStringLiteral("RESULTADO: %1 verificação(ões) falharam.").arg(r.falhas));
-
-    QFile arquivo(arquivoSaida);
-    if (arquivo.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-        QTextStream(&arquivo) << r.linhas.join(QLatin1Char('\n')) << QLatin1Char('\n');
-    }
+    r.linha(QString());
+    r.linha(r.falhas == 0 ? QStringLiteral("RESULTADO: tudo certo.")
+                          : QStringLiteral("RESULTADO: %1 verificação(ões) falharam.").arg(r.falhas));
+    r.arquivo.close();
     return r.falhas == 0 ? 0 : 1;
 }
 
