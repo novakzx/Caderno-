@@ -15,6 +15,7 @@
 #include "database/Migrations.h"
 #include "database/NotaRepository.h"
 #include "database/Repositorios.h"
+#include "database/SqlUtil.h"
 #include "database/TarefaRepository.h"
 #include "database/TurmaRepository.h"
 #include "services/BackupService.h"
@@ -159,6 +160,26 @@ void rodarVariantes(Relatorio &r, const QString &pasta)
 // ---------------------------------------------------------------------------
 void testeDeFumaca(Relatorio &r, const QString &pasta)
 {
+    // --- ligar(): texto nulo não pode virar NULL no SQLite ---
+    r.titulo(QStringLiteral("Texto nulo x NULL (SqlUtil::ligar)"));
+    {
+        auto eNulo = [&](const QVariant &valor, bool *ok) {
+            QSqlQuery q;
+            q.prepare(QStringLiteral("SELECT :x IS NULL"));
+            ligar(q, QStringLiteral(":x"), valor);
+            *ok = q.exec() && q.next();
+            const int resultado = *ok ? q.value(0).toInt() : -1;
+            q.finish();
+            return resultado;
+        };
+        bool ok = false;
+        const QString vazioNaoNulo = QString::fromLatin1("");
+        r.verificar(QStringLiteral("QString::fromLatin1(\"\") não é nulo no Qt"), !vazioNaoNulo.isNull());
+        r.verificar(QStringLiteral("ligar(QString()) grava texto vazio (não NULL)"), eNulo(QVariant(QString()), &ok) == 0 && ok);
+        r.verificar(QStringLiteral("ligar(QString(\"\")) grava texto vazio (não NULL)"), eNulo(QVariant(vazioNaoNulo), &ok) == 0 && ok);
+        r.verificar(QStringLiteral("ligar(QVariant()) continua sendo NULL de propósito"), eNulo(QVariant(), &ok) == 1 && ok);
+    }
+
     r.titulo(QStringLiteral("Repositórios (inserir, listar, filtrar, apagar)"));
 
     TurmaRepository turmas;

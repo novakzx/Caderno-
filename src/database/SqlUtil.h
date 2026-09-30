@@ -19,8 +19,11 @@
 // passe um QVariant() inválido (veja nuloSeZero e dataOuNulo): esse continua sendo NULL.
 inline void ligar(QSqlQuery &q, const QString &nome, const QVariant &valor)
 {
-    if (valor.metaType().id() == QMetaType::QString && valor.isNull())
-        q.bindValue(nome, QVariant(QStringLiteral("")));  // vazio, mas NÃO nulo
+    // Atenção: no Qt 6, QVariant::isNull() NÃO olha dentro do QString, então um
+    // QVariant(QString()) não é "nulo" para o QVariant, mas o driver do SQLite o
+    // grava como NULL do mesmo jeito. Por isso o teste é feito no próprio texto.
+    if (valor.metaType().id() == QMetaType::QString && valor.toString().isNull())
+        q.bindValue(nome, QVariant(QString::fromLatin1("")));  // vazio, mas NÃO nulo
     else
         q.bindValue(nome, valor);
 }
