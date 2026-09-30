@@ -64,7 +64,7 @@ endif()
 
 # --- Testes (sem Qt): ctest --test-dir build ------------------------------------
 enable_testing()
-foreach(nome media horario frequencia contraste)
+foreach(nome media horario frequencia contraste conta)
     add_executable(test_${nome} tests/test_${nome}.cpp)
     target_include_directories(test_${nome} PRIVATE src)
     add_test(NAME ${nome} COMMAND test_${nome})

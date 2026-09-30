@@ -5,12 +5,27 @@
 #include "database/NotaRepository.h"
 
 #include <QColor>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QSet>
 #include <QVariant>
 
 #include <xlsxdocument.h>
 #include <xlsxformat.h>
+#include <xlsxrichstring.h>
+
+namespace {
+
+// Texto vindo do usuário (nomes, matrículas) entra na planilha SEMPRE como texto.
+// O Document::write() do QXlsx converte qualquer texto que comece com "=" em FÓRMULA (e
+// URLs em links): um aluno chamado =HYPERLINK(...) viraria uma fórmula ativa no Excel.
+void escreverTexto(QXlsx::Document &doc, int linha, int coluna, const QString &texto,
+                   const QXlsx::Format &formato = QXlsx::Format())
+{
+    doc.write(linha, coluna, QVariant::fromValue(QXlsx::RichString(texto)), formato);
+}
+
+}  // namespace
 
 namespace XlsxService {
 
@@ -108,7 +123,7 @@ bool exportar(const QString &caminho, const DadosExportacao &dados, QString *err
     for (int i = 0; i < n; ++i) {
         const Avaliacao &a = dados.avaliacoes.at(i);
         const int col = colPrimeira + i;
-        doc.write(1, col, a.nome, fmtCabecalho);
+        escreverTexto(doc, 1, col, a.nome, fmtCabecalho);
         doc.write(linhaPeso, col, a.peso);
         doc.write(linhaMax, col, a.notaMaxima);
         doc.write(linhaPeriodo, col, a.periodo);
@@ -119,8 +134,8 @@ bool exportar(const QString &caminho, const DadosExportacao &dados, QString *err
     for (int i = 0; i < dados.alunos.size(); ++i) {
         const Aluno &aluno = dados.alunos.at(i);
         const int linha = primeiraLinhaAluno + i;
-        doc.write(linha, 1, aluno.matricula);
-        doc.write(linha, 2, aluno.nome);
+        escreverTexto(doc, linha, 1, aluno.matricula);
+        escreverTexto(doc, linha, 2, aluno.nome);
 
         for (int j = 0; j < n; ++j) {
             const auto it = dados.notas.constFind(
@@ -169,6 +184,11 @@ std::optional<Planilha> importar(const QString &caminho, QString *erro)
         return std::nullopt;
     };
 
+    // Limites contra arquivos feitos para travar o programa (planilha gigante ou "bomba" de compressão).
+    constexpr qint64 kTamanhoMaximo = 25LL * 1024 * 1024;
+    if (QFileInfo(caminho).size() > kTamanhoMaximo)
+        return falha(QStringLiteral("O arquivo é grande demais (máximo de 25 MB)."));
+
     QXlsx::Document doc(caminho);
     if (!doc.load())
         return falha(QStringLiteral("Não foi possível abrir o arquivo. Verifique se é um .xlsx válido "
@@ -179,6 +199,8 @@ std::optional<Planilha> importar(const QString &caminho, QString *erro)
         return falha(QStringLiteral("A planilha está vazia."));
     const int ultimaLinha = dim.lastRow();
     const int ultimaColuna = dim.lastColumn();
+    if (ultimaLinha > 5000 || ultimaColuna > 200)
+        return falha(QStringLiteral("A planilha é grande demais (máximo de 5.000 linhas e 200 colunas)."));
 
     auto texto = [&doc](int linha, int coluna) {
         return doc.read(linha, coluna).toString().trimmed();

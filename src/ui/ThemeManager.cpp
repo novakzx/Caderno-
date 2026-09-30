@@ -2,13 +2,17 @@
 
 #include "core/Contraste.h"
 
+#include <QAbstractButton>
 #include <QApplication>
+#include <QDir>
 #include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QPainter>
 #include <QPixmap>
+#include <QPointer>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QStyle>
 #include <QStyleFactory>
 #include <QSvgRenderer>
@@ -27,6 +31,16 @@ QColor corDoToken(Tokens::Id id, ThemeManager::Tema tema)
 {
     return QColor(QLatin1String(Tokens::hex(id, ehEscuro(tema))));
 }
+
+// Ícones postos em botões (ThemeManager::iconeNoBotao): guardados para serem refeitos
+// na cor do tema novo quando o tema muda.
+struct IconeDeBotao {
+    QPointer<QAbstractButton> botao;
+    QString nome;
+    Tokens::Id cor;
+    int tamanho;
+};
+QList<IconeDeBotao> g_iconesDeBotoes;
 
 }  // namespace
 
@@ -51,6 +65,39 @@ void ThemeManager::aplicarFonte()
     fonte.setFamilies({QStringLiteral("Figtree"), QStringLiteral("Segoe UI")});
     fonte.setPixelSize(15);
     qApp->setFont(fonte);
+
+    // O Windows dá fontes próprias a estas classes; sem isto elas ignorariam a Figtree.
+    for (const char *classe : {"QAbstractItemView", "QHeaderView", "QMenu", "QStatusBar", "QToolTip", "QMessageBox"})
+        qApp->setFont(fonte, classe);
+}
+
+// ============================================================================
+// Imagens usadas pelo QSS (setas, marca de seleção)
+// ============================================================================
+
+// O QSS só aceita imagens como arquivo; então as setas são desenhadas na cor do tema e
+// gravadas como PNG numa pasta de cache. Devolve a pasta (com "/" no final).
+QString ThemeManager::prepararImagensDoQss(Tema tema)
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (base.isEmpty())
+        base = QDir::tempPath() + QStringLiteral("/ProfOrganizer");
+    const QString pasta = base + (ehEscuro(tema) ? QStringLiteral("/tema-escuro/") : QStringLiteral("/tema-claro/"));
+    QDir().mkpath(pasta);
+
+    struct Imagem {
+        const char *nome;
+        Tokens::Id cor;
+    };
+    static const Imagem imagens[] = {{"seta-baixo", Tokens::Id::InkMuted},
+                                     {"seta-cima", Tokens::Id::InkMuted},
+                                     {"seta-esquerda", Tokens::Id::Ink},
+                                     {"seta-direita", Tokens::Id::Ink},
+                                     {"marca", Tokens::Id::OnPrimary}};
+    for (const Imagem &imagem : imagens)
+        pixmap(QLatin1String(imagem.nome), corDoToken(imagem.cor, tema), 28)
+            .save(pasta + QLatin1String(imagem.nome) + QStringLiteral(".png"), "PNG");
+    return pasta;
 }
 
 // ============================================================================
@@ -59,27 +106,33 @@ void ThemeManager::aplicarFonte()
 
 QString ThemeManager::montarFolhaDeEstilo(Tema tema)
 {
-    // Modelo de QSS com marcadores @{nome-do-token}, trocados pelas cores do tema.
+    // Modelo de QSS com marcadores @{nome-do-token}, trocados pelas cores do tema, e
+    // @{pasta} (imagens das setas). Dividido em partes por causa do limite de tamanho
+    // de texto literal do compilador.
     // Raios: sm 6px (chips, badges) · md 10px (botões, campos, cartões) · lg 16px (painéis).
     // Tamanhos de texto: title 22px · heading 17px · body 15px (padrão) · small 13px · label 12px.
+    // Obs.: NÃO pôr font-family aqui (a lista de fontes no QSS trava o Qt); a família vem do
+    // QApplication::setFont().
     QString qss = QStringLiteral(R"(
-        /* Fonte no QSS também: o Windows impõe uma fonte própria às tabelas e cabeçalhos, que só o QSS sobrepõe. */
         QWidget { background: @{surface-100}; color: @{ink}; font-size: 15px; }
         QToolTip { background: @{surface-200}; color: @{ink}; border: 1px solid @{line}; border-radius: 6px; padding: 4px 8px; }
 
-        /* Barra lateral: clara, com borda à direita; item ativo em primary-soft */
+        /* Janela sem moldura do sistema */
+        QMainWindow#janela { border: 1px solid @{line}; }
+        QMainWindow#janela[maximizada="true"] { border: none; }
+        #barraTitulo { background: @{surface-100}; }
+        QLabel#versao { color: @{ink-muted}; font-size: 12px; background: transparent; }
+
+        /* Barra lateral: clara, com borda à direita (os itens são desenhados por BotaoNav) */
         #sidebar { background: @{surface-200}; border-right: 1px solid @{line}; }
         #sidebar QLabel#appTitle { background: transparent; color: @{ink};
             font-size: 22px; font-weight: 700; padding: 18px 16px 10px 16px; }
-        #sidebar QPushButton { background: transparent; color: @{ink-muted};
-            text-align: left; padding: 8px 14px; border: none; border-radius: 10px;
-            margin: 1px 10px; }
-        #sidebar QPushButton#footerButton { padding: 7px 14px; }
-        #sidebar QPushButton:hover { background: @{surface-300}; color: @{ink}; }
-        #sidebar QPushButton:checked { background: @{primary-soft}; color: @{primary}; font-weight: 600; }
-        #sidebar QPushButton:checked:hover { background: @{primary-soft}; color: @{primary}; }
-        #sidebar QPushButton:focus { border: 2px solid @{focus}; padding: 6px 12px; }
-        #sidebar QPushButton#themeButton { border: 1px solid @{line}; }
+        #sidebar QFrame#divisor { background: @{line}; max-height: 1px; min-height: 1px; margin: 6px 12px; border: none; }
+        #sidebar QLabel { background: transparent; }
+        #sidebar QLabel#avatar { background: @{primary-soft}; color: @{primary}; border-radius: 16px;
+            font-weight: 700; min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; }
+        #sidebar QLabel#nomeUsuario { font-weight: 600; font-size: 14px; }
+        #sidebar QLabel#emailUsuario { color: @{ink-muted}; font-size: 12px; }
 
         /* Páginas */
         QLabel#pageTitle { font-size: 22px; font-weight: 600; background: transparent; }
@@ -88,31 +141,79 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
         QFrame#card { background: @{surface-200}; border: 1px solid @{line}; border-radius: 10px; }
         QFrame#card QLabel { background: transparent; }
 
+        /* Tela de login */
+        QDialog#login { background: @{surface-100}; border: 1px solid @{line}; }
+        QFrame#painelMarca { background: @{primary}; border: none; }
+        QFrame#painelMarca QLabel { background: transparent; color: @{on-primary}; }
+        QLabel#marcaGrande { font-size: 34px; font-weight: 700; }
+        QLabel#marcaFrase { font-size: 16px; }
+        QLabel#tituloLogin { font-size: 26px; font-weight: 700; background: transparent; }
+        QLabel#dicaLogin { color: @{ink-muted}; font-size: 13px; background: transparent; }
+        QLabel#codigoRecuperacao { font-size: 22px; font-weight: 700; letter-spacing: 2px; background: @{surface-300};
+            border: 1px dashed @{line-strong}; border-radius: 10px; padding: 14px; color: @{ink}; }
+
         /* Mensagens de estado (sempre com texto; a cor só reforça) */
         QLabel[estado="sucesso"] { color: @{success}; font-weight: 600; background: transparent; }
         QLabel[estado="aviso"] { color: @{warning}; font-weight: 600; background: transparent; }
         QLabel[estado="erro"] { color: @{danger}; font-weight: 600; background: transparent; }
+    )");
+
+    qss += QStringLiteral(R"(
+        QLineEdit#tituloEditor { font-size: 20px; font-weight: 700; }
+        QLineEdit#campoBusca { font-size: 17px; }
 
         /* Campos: borda de controle em line-strong; foco com anel de 2px em focus */
-        QLineEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QTimeEdit, QComboBox, QPlainTextEdit, QTextEdit {
+        QLineEdit, QPlainTextEdit, QTextEdit {
             background: @{surface-200}; border: 1px solid @{line-strong}; border-radius: 10px;
             padding: 6px 8px; selection-background-color: @{primary}; selection-color: @{on-primary}; }
-        QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QTimeEdit:focus,
-        QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus { border: 2px solid @{focus}; padding: 5px 7px; }
-        QLineEdit:disabled, QSpinBox:disabled, QDateEdit:disabled, QComboBox:disabled { color: @{ink-muted}; background: @{surface-300}; }
+        QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus { border: 2px solid @{focus}; padding: 5px 7px; }
+        QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit, QTimeEdit {
+            background: @{surface-200}; border: 1px solid @{line-strong}; border-radius: 10px;
+            padding: 6px 30px 6px 8px; selection-background-color: @{primary}; selection-color: @{on-primary}; }
+        QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QTimeEdit:focus {
+            border: 2px solid @{focus}; padding: 5px 29px 5px 7px; }
+        QLineEdit:disabled, QSpinBox:disabled, QDateEdit:disabled, QComboBox:disabled {
+            color: @{ink-muted}; background: @{surface-300}; }
         QComboBox QAbstractItemView { background: @{surface-200}; border: 1px solid @{line};
-            selection-background-color: @{primary-soft}; selection-color: @{primary}; }
+            selection-background-color: @{primary-soft}; selection-color: @{primary}; outline: none; }
+
+        /* Setas dos campos (imagens na cor do tema) */
+        QComboBox::drop-down, QDateEdit::drop-down, QTimeEdit::drop-down {
+            subcontrol-origin: padding; subcontrol-position: center right; width: 28px; border: none; background: transparent; }
+        QComboBox::down-arrow, QDateEdit::down-arrow, QTimeEdit::down-arrow {
+            image: url("@{pasta}seta-baixo.png"); width: 14px; height: 14px; }
+        QSpinBox::up-button, QDoubleSpinBox::up-button { subcontrol-origin: border; subcontrol-position: top right;
+            width: 24px; border: none; background: transparent; margin: 3px 2px 0 0; }
+        QSpinBox::down-button, QDoubleSpinBox::down-button { subcontrol-origin: border; subcontrol-position: bottom right;
+            width: 24px; border: none; background: transparent; margin: 0 2px 3px 0; }
+        QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url("@{pasta}seta-cima.png"); width: 11px; height: 11px; }
+        QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url("@{pasta}seta-baixo.png"); width: 11px; height: 11px; }
+
+        /* Caixas de seleção */
+        QCheckBox { background: transparent; spacing: 8px; }
+        QCheckBox::indicator, QTableView::indicator, QListView::indicator { width: 18px; height: 18px;
+            border: 1px solid @{line-strong}; border-radius: 6px; background: @{surface-200}; }
+        QCheckBox::indicator:hover, QTableView::indicator:hover { border-color: @{primary}; }
+        QCheckBox::indicator:checked, QTableView::indicator:checked, QListView::indicator:checked {
+            background: @{primary}; border-color: @{primary}; image: url("@{pasta}marca.png"); }
+        QCheckBox:focus { color: @{primary}; }
 
         /* Botões */
         QPushButton { background: @{surface-300}; border: 1px solid @{line}; border-radius: 10px; padding: 7px 14px; }
         QPushButton:hover { background: @{line}; }
+        QPushButton:pressed { background: @{line-strong}; }
         QPushButton:focus { border: 2px solid @{focus}; padding: 6px 13px; }
-        QPushButton:disabled { color: @{ink-muted}; }
+        QPushButton:disabled { color: @{ink-muted}; background: @{surface-300}; }
         QPushButton#primary { background: @{primary}; color: @{on-primary}; border: none; font-weight: 600; }
-        QPushButton#primary:hover { background: @{primary}; }
+        QPushButton#primary:hover { background: @{primary}; border: 2px solid @{primary-soft}; padding: 5px 12px; }
         QPushButton#primary:focus { border: 2px solid @{ink}; padding: 5px 12px; }
+        QPushButton#primary:disabled { background: @{surface-300}; color: @{ink-muted}; }
         QPushButton#danger { color: @{danger}; }
+        QPushButton#link { background: transparent; border: none; color: @{primary}; font-weight: 600; padding: 4px 6px; }
+        QPushButton#link:hover { background: @{primary-soft}; }
+    )");
 
+    qss += QStringLiteral(R"(
         /* Tabelas */
         QTableWidget, QTableView { background: @{surface-200}; alternate-background-color: @{surface-300};
             border: 1px solid @{line}; border-radius: 10px; gridline-color: @{line};
@@ -132,23 +233,32 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
         QToolButton:hover { background: @{line}; }
         QToolButton:checked { background: @{primary-soft}; border: 1px solid @{primary}; }
         QListWidget { background: @{surface-200}; border: 1px solid @{line}; border-radius: 10px;
-            alternate-background-color: @{surface-300}; }
+            alternate-background-color: @{surface-300}; outline: none; }
         QListWidget::item { padding: 6px 8px; }
         QListWidget::item:selected { background: @{primary-soft}; color: @{primary}; }
+
+        /* Calendário */
         QCalendarWidget QWidget { alternate-background-color: @{surface-300}; }
         QCalendarWidget QAbstractItemView { background: @{surface-200}; selection-background-color: @{primary};
-            selection-color: @{on-primary}; }
+            selection-color: @{on-primary}; outline: none; }
+        QCalendarWidget QWidget#qt_calendar_navigationbar { background: @{surface-200}; }
+        QCalendarWidget QToolButton { background: transparent; border: none; border-radius: 8px;
+            color: @{ink}; font-weight: 600; padding: 4px 10px; icon-size: 16px; }
+        QCalendarWidget QToolButton:hover { background: @{surface-300}; }
+        QCalendarWidget QToolButton#qt_calendar_prevmonth { qproperty-icon: url("@{pasta}seta-esquerda.png"); }
+        QCalendarWidget QToolButton#qt_calendar_nextmonth { qproperty-icon: url("@{pasta}seta-direita.png"); }
+        QCalendarWidget QToolButton::menu-indicator { image: none; }
 
-        /* Selo "AGORA"/"PRÓXIMA" do painel Hoje */
+        /* Selo "AGORA"/"PRÓXIMA" do painel Hoje (a 2ª regra vence a de "QFrame#card QLabel") */
         QLabel#badge, QFrame#card QLabel#badge { background: @{primary}; color: @{on-primary}; border-radius: 6px;
             padding: 3px 10px; font-size: 12px; font-weight: 700; }
-        QCheckBox { background: transparent; spacing: 8px; }
         QScrollArea { background: transparent; border: none; }
         QScrollArea > QWidget > QWidget { background: transparent; }
 
         /* Divisores, rolagem e status */
         QSplitter::handle { background: transparent; }
         QStatusBar { background: @{surface-200}; color: @{ink-muted}; font-size: 13px; }
+        QStatusBar::item { border: none; }
         QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
         QScrollBar::handle:vertical { background: @{line-strong}; border-radius: 5px; min-height: 30px; }
         QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
@@ -166,6 +276,7 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
         qss.replace(QStringLiteral("@{%1}").arg(QLatin1String(Tokens::definicao(id).nome)),
                     QLatin1String(Tokens::hex(id, ehEscuro(tema))));
     }
+    qss.replace(QStringLiteral("@{pasta}"), prepararImagensDoQss(tema));
     return qss;
 }
 
@@ -179,6 +290,15 @@ void ThemeManager::aplicar(Tema tema)
     qApp->setStyle(QStyleFactory::create(QStringLiteral("Fusion")));  // aparência igual em todos os SOs
     aplicarFonte();
     qApp->setStyleSheet(montarFolhaDeEstilo(tema));
+
+    // Ícones postos em botões ficam na cor do tema novo.
+    for (int i = g_iconesDeBotoes.size() - 1; i >= 0; --i) {
+        const IconeDeBotao &item = g_iconesDeBotoes.at(i);
+        if (item.botao.isNull())
+            g_iconesDeBotoes.removeAt(i);
+        else
+            item.botao->setIcon(iconeColorido(item.nome, item.cor, item.tamanho));
+    }
 
     QSettings().setValue(QStringLiteral("tema"), tema == Tema::Escuro ? "escuro" : "claro");
     emit notificador().temaMudou();
@@ -311,6 +431,11 @@ QPixmap desenharSvg(const QString &nome, const QColor &cor, int tamanho)
 
 }  // namespace
 
+QPixmap ThemeManager::pixmap(const QString &nome, const QColor &cor, int tamanho)
+{
+    return desenharSvg(nome, cor, tamanho);
+}
+
 QIcon ThemeManager::icone(const QString &nome, int tamanho)
 {
     QIcon icone;
@@ -321,12 +446,24 @@ QIcon ThemeManager::icone(const QString &nome, int tamanho)
 
 QIcon ThemeManager::iconeColorido(const QString &nome, Tokens::Id token, int tamanho)
 {
-    return QIcon(desenharSvg(nome, cor(token), tamanho));
+    return iconeColorido(nome, cor(token), tamanho);
 }
 
 QIcon ThemeManager::iconeColorido(const QString &nome, const QColor &cor, int tamanho)
 {
-    return QIcon(desenharSvg(nome, cor, tamanho));
+    QIcon icone(desenharSvg(nome, cor, tamanho));
+    // Botão desativado: o mesmo ícone, em cinza.
+    icone.addPixmap(desenharSvg(nome, ThemeManager::cor(Tokens::Id::InkMuted), tamanho), QIcon::Disabled);
+    return icone;
+}
+
+void ThemeManager::iconeNoBotao(QAbstractButton *botao, const QString &nome, Tokens::Id cor, int tamanho)
+{
+    if (!botao)
+        return;
+    botao->setIconSize(QSize(tamanho, tamanho));
+    botao->setIcon(iconeColorido(nome, cor, tamanho));
+    g_iconesDeBotoes.append({botao, nome, cor, tamanho});
 }
 
 void ThemeManager::definirEstado(QWidget *widget, Estado estado)

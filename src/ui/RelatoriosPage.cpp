@@ -1,4 +1,5 @@
 #include "ui/RelatoriosPage.h"
+#include "ui/ThemeManager.h"
 
 #include "core/FrequenciaUtil.h"
 #include "database/AlunoRepository.h"
@@ -89,11 +90,15 @@ RelatoriosPage::RelatoriosPage(Repositorios &repos, QWidget *parent)
 
     // Botões de exportação
     auto *botoes = new QHBoxLayout;
-    auto *btnPng = new QPushButton(QStringLiteral("🖼 Salvar gráfico (PNG)"));
-    auto *btnBoletim = new QPushButton(QStringLiteral("📄 Boletim da turma (PDF)"));
-    auto *btnFrequencia = new QPushButton(QStringLiteral("📄 Frequência da turma (PDF)"));
-    auto *btnFicha = new QPushButton(QStringLiteral("📄 Ficha do aluno (PDF)"));
+    auto *btnPng = new QPushButton(QStringLiteral("Salvar gráfico (PNG)"));
+    auto *btnBoletim = new QPushButton(QStringLiteral("Boletim da turma (PDF)"));
+    auto *btnFrequencia = new QPushButton(QStringLiteral("Frequência da turma (PDF)"));
+    auto *btnFicha = new QPushButton(QStringLiteral("Ficha do aluno (PDF)"));
     btnBoletim->setObjectName(QStringLiteral("primary"));
+    ThemeManager::iconeNoBotao(btnPng, QStringLiteral("imagem"));
+    ThemeManager::iconeNoBotao(btnBoletim, QStringLiteral("relatorios"), Tokens::Id::OnPrimary);
+    ThemeManager::iconeNoBotao(btnFrequencia, QStringLiteral("relatorios"));
+    ThemeManager::iconeNoBotao(btnFicha, QStringLiteral("relatorios"));
     botoes->addWidget(btnPng);
     botoes->addStretch(1);
     botoes->addWidget(btnBoletim);

@@ -45,7 +45,7 @@ void esvaziar(QLayout *layout)
 }
 
 // Cartão com título e uma lista que o chamador preenche.
-QFrame *criarCartao(const QString &titulo, QVBoxLayout **lista)
+QFrame *criarCartao(const QString &icone, const QString &titulo, QVBoxLayout **lista)
 {
     auto *cartao = new QFrame;
     cartao->setObjectName(QStringLiteral("card"));
@@ -53,9 +53,18 @@ QFrame *criarCartao(const QString &titulo, QVBoxLayout **lista)
     layout->setContentsMargins(20, 16, 20, 16);
     layout->setSpacing(10);
 
+    // Título do cartão: ícone (refeito quando o tema muda) + texto.
+    auto *cabecalho = new QHBoxLayout;
+    cabecalho->setSpacing(8);
+    auto *lblIcone = new QLabel;
+    lblIcone->setProperty("iconeDoCartao", icone);
+    lblIcone->setPixmap(ThemeManager::pixmap(icone, ThemeManager::cor(Tokens::Id::InkMuted), 20));
+    lblIcone->setFixedSize(22, 22);
     auto *lblTitulo = new QLabel(titulo);
     lblTitulo->setObjectName(QStringLiteral("sectionTitle"));
-    layout->addWidget(lblTitulo);
+    cabecalho->addWidget(lblIcone);
+    cabecalho->addWidget(lblTitulo, 1);
+    layout->addLayout(cabecalho);
 
     *lista = new QVBoxLayout;
     (*lista)->setSpacing(8);
@@ -67,6 +76,7 @@ QFrame *criarCartao(const QString &titulo, QVBoxLayout **lista)
 QLabel *textoMudo(const QString &texto)
 {
     auto *l = new QLabel(texto);
+    l->setTextFormat(Qt::PlainText);  // pode ter nome de turma/tarefa: nunca como HTML
     l->setObjectName(QStringLiteral("muted"));
     l->setWordWrap(true);
     return l;
@@ -117,16 +127,16 @@ HojePage::HojePage(AgendaRepository &agenda, TarefaRepository &tarefas, QWidget 
     auto *grade = new QGridLayout;
     grade->setHorizontalSpacing(16);
     grade->setVerticalSpacing(16);
-    grade->addWidget(criarCartao(QStringLiteral("📚  Aulas de hoje"), &m_listaAulas), 0, 0, 2, 1);
+    grade->addWidget(criarCartao(QStringLiteral("aulas"), QStringLiteral("Aulas de hoje"), &m_listaAulas), 0, 0, 2, 1);
 
-    QFrame *cartaoTarefas = criarCartao(QStringLiteral("✅  Tarefas pendentes"), &m_listaTarefas);
+    QFrame *cartaoTarefas = criarCartao(QStringLiteral("tarefa-ok"), QStringLiteral("Tarefas pendentes"), &m_listaTarefas);
     m_novaTarefa = new QLineEdit;
     m_novaTarefa->setPlaceholderText(QStringLiteral("Nova tarefa… (Enter para adicionar)"));
     m_novaTarefa->setClearButtonEnabled(true);
     cartaoTarefas->layout()->addWidget(m_novaTarefa);
     grade->addWidget(cartaoTarefas, 0, 1);
 
-    grade->addWidget(criarCartao(QStringLiteral("📝  Provas próximas"), &m_listaProvas), 1, 1);
+    grade->addWidget(criarCartao(QStringLiteral("anotacoes"), QStringLiteral("Provas próximas"), &m_listaProvas), 1, 1);
     grade->setColumnStretch(0, 3);
     grade->setColumnStretch(1, 2);
     raiz->addLayout(grade, 1);
@@ -134,6 +144,11 @@ HojePage::HojePage(AgendaRepository &agenda, TarefaRepository &tarefas, QWidget 
     connect(m_novaTarefa, &QLineEdit::returnPressed, this, &HojePage::criarTarefaRapida);
     // Faixas das turmas, provas e prazos atrasados acompanham o tema.
     connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        for (QLabel *rotulo : findChildren<QLabel *>()) {  // ícones dos títulos dos cartões
+            const QVariant nome = rotulo->property("iconeDoCartao");
+            if (nome.isValid())
+                rotulo->setPixmap(ThemeManager::pixmap(nome.toString(), ThemeManager::cor(Tokens::Id::InkMuted), 20));
+        }
         if (isVisible())
             atualizar();
     });
@@ -179,7 +194,7 @@ void HojePage::atualizarAulas(const QDate &hoje, const QTime &agora, int *total)
     *total = aulas.size();
 
     if (aulas.isEmpty()) {
-        m_listaAulas->addWidget(textoMudo(QStringLiteral("Nenhuma aula hoje. 🎉")));
+        m_listaAulas->addWidget(textoMudo(QStringLiteral("Nenhuma aula hoje.")));
         return;
     }
 
@@ -241,7 +256,7 @@ void HojePage::atualizarTarefas(const QDate &hoje, int *total)
     *total = tarefas.size();
 
     if (tarefas.isEmpty()) {
-        m_listaTarefas->addWidget(textoMudo(QStringLiteral("Nada pendente. Bom trabalho! ✨")));
+        m_listaTarefas->addWidget(textoMudo(QStringLiteral("Nada pendente. Bom trabalho!")));
         return;
     }
 

@@ -1,6 +1,7 @@
 #include "services/AutoTeste.h"
 
 #include "core/BuildInfo.h"
+#include "core/AnexoUtil.h"
 #include "core/Tokens.h"
 #include "database/AgendaRepository.h"
 #include "database/AlunoRepository.h"
@@ -9,6 +10,7 @@
 #include "database/AulaRepository.h"
 #include "database/AvaliacaoRepository.h"
 #include "database/BuscaRepository.h"
+#include "database/ContaRepository.h"
 #include "database/DatabaseManager.h"
 #include "database/EventoRepository.h"
 #include "database/FrequenciaRepository.h"
@@ -20,10 +22,15 @@
 #include "database/TarefaRepository.h"
 #include "database/TurmaRepository.h"
 #include "services/BackupService.h"
+#include "services/ContaService.h"
 #include "services/DesempenhoService.h"
+#include "services/XlsxService.h"
 #include "services/RelatorioPdf.h"
 
 #include <QColor>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QRegularExpression>
 #include <QFile>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -31,6 +38,9 @@
 #include <QSvgRenderer>
 #include <QTemporaryDir>
 #include <QUuid>
+
+#include <xlsxcell.h>
+#include <xlsxdocument.h>
 
 namespace AutoTeste {
 
@@ -422,22 +432,37 @@ void testeRecursosDoDesign(Relatorio &r)
 {
     r.titulo(QStringLiteral("Recursos do design (ícones SVG, fontes, tokens)"));
 
-    static const char *icones[] = {"hoje", "turmas", "notas", "frequencia", "horario", "aulas", "anotacoes",
-                                   "tarefas", "calendario", "relatorios", "busca", "backup", "lua", "sol", "check"};
+    // Todos os SVG embutidos devem ser válidos e usar currentColor (para o tema recolorir),
+    // exceto o símbolo da marca, que tem as cores próprias do logo.
     int validos = 0;
     QStringList invalidos;
-    for (const char *nome : icones) {
-        QFile arquivo(QStringLiteral(":/icons/%1.svg").arg(QLatin1String(nome)));
+    const QStringList arquivos = QDir(QStringLiteral(":/icons")).entryList({QStringLiteral("*.svg")}, QDir::Files);
+    for (const QString &nomeArquivo : arquivos) {
+        QFile arquivo(QStringLiteral(":/icons/%1").arg(nomeArquivo));
         const bool existe = arquivo.open(QIODevice::ReadOnly);
         const QByteArray svg = existe ? arquivo.readAll() : QByteArray();
         QSvgRenderer renderizador(svg);
-        if (existe && renderizador.isValid() && svg.contains("currentColor"))
+        const bool exigeCor = nomeArquivo != QLatin1String("caderno-mark.svg");
+        if (existe && renderizador.isValid() && (!exigeCor || svg.contains("currentColor")))
             ++validos;
         else
-            invalidos << QLatin1String(nome);
+            invalidos << nomeArquivo;
     }
-    r.verificar(QStringLiteral("ícones SVG embutidos e válidos (%1 de %2)").arg(validos).arg(int(sizeof(icones) / sizeof(icones[0]))),
-                invalidos.isEmpty(), invalidos.join(QStringLiteral(", ")));
+    r.verificar(QStringLiteral("ícones SVG embutidos e válidos (%1 de %2)").arg(validos).arg(arquivos.size()),
+                invalidos.isEmpty() && arquivos.size() >= 40, invalidos.join(QStringLiteral(", ")));
+    // Ícones que o código pede pelo nome: nenhum pode faltar.
+    static const char *usados[] = {"hoje", "turmas", "notas", "frequencia", "horario", "aulas", "anotacoes", "tarefas",
+                                   "calendario", "relatorios", "busca", "backup", "lua", "sol", "check", "anexo",
+                                   "marca-texto", "limpar", "aluno", "tarefa-ok", "feriado", "recesso", "pin", "mais",
+                                   "subir", "baixar", "imagem", "usuario", "cadeado", "email", "olho", "olho-fechado",
+                                   "sair", "chave", "janela-minimizar", "janela-maximizar", "janela-restaurar",
+                                   "janela-fechar", "seta-baixo", "seta-cima", "seta-esquerda", "seta-direita", "marca",
+                                   "caderno-mark"};
+    QStringList faltando;
+    for (const char *nome : usados)
+        if (!QFile::exists(QStringLiteral(":/icons/%1.svg").arg(QLatin1String(nome))))
+            faltando << QLatin1String(nome);
+    r.verificar(QStringLiteral("todos os ícones usados pelo programa existem"), faltando.isEmpty(), faltando.join(QStringLiteral(", ")));
 
     for (const char *fonte : {"Figtree-Regular.ttf", "Figtree-SemiBold.ttf", "Figtree-Bold.ttf"}) {
         QFile arquivo(QStringLiteral(":/fonts/%1").arg(QLatin1String(fonte)));
@@ -455,6 +480,161 @@ void testeRecursosDoDesign(Relatorio &r)
     r.verificar(QStringLiteral("%1 tokens de cor válidos nos dois temas").arg(int(Tokens::kTotal)), formatoOk);
     r.verificar(QStringLiteral("cor padrão de turma nova (turma-6) é o primary"),
                 QLatin1String(Tokens::hex(Tokens::Id::Turma6, false)) == QLatin1String(Tokens::hex(Tokens::Id::Primary, false)));
+}
+
+// ---------------------------------------------------------------------------
+// Contas locais: cadastro, entrada, bloqueio por tentativas, recuperação de senha.
+// O relógio é simulado para testar o bloqueio sem esperar.
+// ---------------------------------------------------------------------------
+void testeContas(Relatorio &r, const QString &pasta)
+{
+    r.titulo(QStringLiteral("Contas (login, senha, bloqueio, recuperação)"));
+
+    // PBKDF2-HMAC-SHA512 contra vetores conhecidos (gerados com o hashlib do Python).
+    const QByteArray senhaV("password"), salV("salt");
+    r.verificar(QStringLiteral("PBKDF2-SHA512, 1 iteração (vetor conhecido)"),
+                ContaService::pbkdf2(senhaV, salV, 1).toHex() ==
+                    "867f70cf1ade02cff3752599a3a53dc4af34c7a669815ae5d513554e1c8cf252c02d470a285a0501bad999bfe943c08f050235d7d68b1da55e63f73b60a57fce");
+    r.verificar(QStringLiteral("PBKDF2-SHA512, 2 iterações (vetor conhecido)"),
+                ContaService::pbkdf2(senhaV, salV, 2).toHex() ==
+                    "e1d9c16aa681708a45f5c7c4e215ceb66e011a2e9f0040713f18aefdb866d53cf76cab2868a39b9f7840edce4fef5a82be67335c77a6068e04112754f27ccf4e");
+    r.verificar(QStringLiteral("PBKDF2-SHA512, 4096 iterações (vetor conhecido)"),
+                ContaService::pbkdf2(senhaV, salV, 4096).toHex() ==
+                    "d197b1b33db0143e018b12f3d1d1479e6cdebdcc97c5c0f87f6902e072f457b5143f30602641b3d55cd335988cb36b84376060ecd532e039b742a239434af2d5");
+
+    qint64 agoraDeTeste = 1000000;
+    ContaService::usarRelogioDeTeste([&agoraDeTeste] { return agoraDeTeste; });
+    const QString pastaContas = pasta + QStringLiteral("/contas-teste");
+    {
+        ContaService contas(pastaContas);
+        r.verificar(QStringLiteral("cadastro de contas abre"), contas.disponivel(), contas.erroDeAbertura());
+        r.verificar(QStringLiteral("começa sem contas"), !contas.temContas());
+
+        const QString senha = QStringLiteral("Giz2026!x");
+        QElapsedTimer cronometro;
+        cronometro.start();
+        const ResultadoConta ana = contas.registrar(QStringLiteral("Ana Souza"), QStringLiteral("Ana@Escola.com"), senha, senha);
+        r.info(QStringLiteral("criar conta (2 hashes PBKDF2 de 210 mil iterações): %1 ms").arg(cronometro.elapsed()));
+        r.verificar(QStringLiteral("registrar: conta criada"), ana.ok, ana.erro);
+        r.verificar(QStringLiteral("e-mail guardado em minúsculas; 1ª conta adota professor.db"),
+                    ana.conta.email == QStringLiteral("ana@escola.com") && ana.conta.arquivoDados == QStringLiteral("professor.db"));
+        r.verificar(QStringLiteral("código de recuperação no formato XXXX-XXXX-XXXX-XXXX-XXXX"),
+                    QRegularExpression(QStringLiteral("^[A-Z2-9]{4}(-[A-Z2-9]{4}){4}$")).match(ana.codigoRecuperacao).hasMatch(),
+                    ana.codigoRecuperacao);
+
+        // Recusas de cadastro
+        r.verificar(QStringLiteral("registrar recusa senha fraca"),
+                    !contas.registrar(QStringLiteral("Bia Lima"), QStringLiteral("bia@x.com"), QStringLiteral("12345678"), QStringLiteral("12345678")).ok);
+        r.verificar(QStringLiteral("registrar recusa confirmação diferente"),
+                    !contas.registrar(QStringLiteral("Bia Lima"), QStringLiteral("bia@x.com"), senha, QStringLiteral("outra")).ok);
+        r.verificar(QStringLiteral("registrar recusa e-mail inválido"),
+                    !contas.registrar(QStringLiteral("Bia Lima"), QStringLiteral("bia-sem-arroba"), senha, senha).ok);
+        r.verificar(QStringLiteral("registrar recusa e-mail repetido (ignora maiúsculas)"),
+                    !contas.registrar(QStringLiteral("Outra Ana"), QStringLiteral("ANA@ESCOLA.COM"), senha, senha).ok);
+
+        const ResultadoConta bia = contas.registrar(QStringLiteral("Bia Lima"), QStringLiteral("bia@escola.com"), QStringLiteral("Lousa#2027"), QStringLiteral("Lousa#2027"));
+        r.verificar(QStringLiteral("2ª conta tem pasta de dados própria"),
+                    bia.ok && bia.conta.arquivoDados == QStringLiteral("contas/%1/professor.db").arg(bia.conta.id), bia.erro + bia.conta.arquivoDados);
+
+        // Entrar
+        r.verificar(QStringLiteral("entrar com a senha certa (e-mail em maiúsculas)"), contas.entrar(QStringLiteral("ANA@escola.com"), senha).ok);
+        const ResultadoConta errada = contas.entrar(QStringLiteral("ana@escola.com"), QStringLiteral("senha-errada1"));
+        const ResultadoConta inexistente = contas.entrar(QStringLiteral("ninguem@escola.com"), senha);
+        r.verificar(QStringLiteral("senha errada é recusada"), !errada.ok);
+        r.verificar(QStringLiteral("e-mail inexistente dá a MESMA mensagem (não revela quem tem conta)"),
+                    !inexistente.ok && inexistente.erro == errada.erro, errada.erro + " | " + inexistente.erro);
+
+        // Bloqueio: 5 erros seguidos bloqueiam, mesmo com a senha certa, até o tempo passar
+        // (a 1ª falha acima já contou; mais 3 aqui e a 5ª abaixo).
+        ResultadoConta ultima;
+        for (int i = 0; i < 3; ++i)
+            ultima = contas.entrar(QStringLiteral("ana@escola.com"), QStringLiteral("tentativa%1x").arg(i));
+        r.verificar(QStringLiteral("4ª senha errada ainda não bloqueia"), !ultima.ok && ultima.segundosDeBloqueio == 0);
+        ultima = contas.entrar(QStringLiteral("ana@escola.com"), QStringLiteral("tentativa-5x"));
+        r.verificar(QStringLiteral("5ª senha errada bloqueia por 30 s"), !ultima.ok && ultima.segundosDeBloqueio == 30, QString::number(ultima.segundosDeBloqueio));
+        const ResultadoConta bloqueada = contas.entrar(QStringLiteral("ana@escola.com"), senha);
+        r.verificar(QStringLiteral("conta bloqueada recusa até a senha certa"), !bloqueada.ok && bloqueada.segundosDeBloqueio > 0);
+        agoraDeTeste += 31;
+        r.verificar(QStringLiteral("depois do tempo do bloqueio, a senha certa entra de novo"), contas.entrar(QStringLiteral("ana@escola.com"), senha).ok);
+
+        // A senha nunca é gravada em texto: o banco só tem hash e sal.
+        {
+            ContaRepository leitura(QDir(pastaContas).filePath(QStringLiteral("contas.db")));
+            const auto registro = leitura.porEmail(QStringLiteral("ana@escola.com"));
+            r.verificar(QStringLiteral("banco guarda só hash (64 bytes), sal (16 bytes) e 210.000 iterações"),
+                        registro && registro->hash.size() == 64 && registro->sal.size() == 16 &&
+                            registro->iteracoes == ContaService::kIteracoes && !registro->hash.contains(senha.toUtf8()) &&
+                            registro->hash == ContaService::pbkdf2(senha.toUtf8(), registro->sal, registro->iteracoes));
+        }
+
+        // Recuperação de senha pelo código
+        const QString novaSenha = QStringLiteral("Quadro!2030a");
+        r.verificar(QStringLiteral("recuperar: código errado é recusado"),
+                    !contas.redefinirSenha(QStringLiteral("ana@escola.com"), QStringLiteral("AAAA-BBBB-CCCC-DDDD-EEEE"), novaSenha).ok);
+        const QString codigoAntigo = ana.codigoRecuperacao;
+        const ResultadoConta fraca = contas.redefinirSenha(QStringLiteral("ana@escola.com"), codigoAntigo, QStringLiteral("12345678"));
+        r.verificar(QStringLiteral("recuperar: senha nova fraca é recusada (e o código continua valendo)"), !fraca.ok);
+        // O código vale em minúsculas e sem hífens (digitação mais livre)
+        QString digitado = codigoAntigo.toLower();
+        digitado.remove(QLatin1Char('-'));
+        const ResultadoConta redefinida = contas.redefinirSenha(QStringLiteral("ana@escola.com"), digitado, novaSenha);
+        r.verificar(QStringLiteral("recuperar: código certo (digitado em minúsculas, sem hífens) troca a senha"), redefinida.ok, redefinida.erro);
+        r.verificar(QStringLiteral("recuperar: gera um código NOVO"), redefinida.ok && !redefinida.codigoRecuperacao.isEmpty() &&
+                                                                      redefinida.codigoRecuperacao != codigoAntigo);
+        r.verificar(QStringLiteral("recuperar: a senha antiga deixa de valer"), !contas.entrar(QStringLiteral("ana@escola.com"), senha).ok);
+        r.verificar(QStringLiteral("recuperar: a senha nova entra"), contas.entrar(QStringLiteral("ana@escola.com"), novaSenha).ok);
+        r.verificar(QStringLiteral("recuperar: o código antigo deixa de valer"),
+                    !contas.redefinirSenha(QStringLiteral("ana@escola.com"), codigoAntigo, QStringLiteral("Outra!2031bb")).ok);
+    }
+    ContaService::usarRelogioDeTeste(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// Segurança: texto do usuário não pode virar fórmula do Excel; tipos perigosos de anexo são recusados.
+// ---------------------------------------------------------------------------
+void testeSeguranca(Relatorio &r, const QString &pasta)
+{
+    r.titulo(QStringLiteral("Segurança (injeção de fórmula, anexos perigosos)"));
+
+    XlsxService::DadosExportacao dados;
+    dados.titulo = QStringLiteral("Teste");
+    Aluno a;
+    a.id = 1;
+    a.matricula = QStringLiteral("=1+1");
+    a.nome = QStringLiteral("=HYPERLINK(\"http://exemplo.invalido\",\"clique\")");
+    dados.alunos.append(a);
+    Avaliacao av;
+    av.id = 1;
+    av.nome = QStringLiteral("+SUM(A1:A2)");
+    dados.avaliacoes.append(av);
+
+    const QString arquivo = pasta + QStringLiteral("/injecao.xlsx");
+    QString erro;
+    const bool exportou = XlsxService::exportar(arquivo, dados, &erro);
+    r.verificar(QStringLiteral("exportar planilha de teste"), exportou, erro);
+    if (exportou) {
+        QXlsx::Document doc(arquivo);
+        const bool carregou = doc.load();
+        const auto nome = doc.cellAt(5, 2);
+        const auto matricula = doc.cellAt(5, 1);
+        r.verificar(QStringLiteral("nome do aluno começando com \"=\" é gravado como TEXTO, não como fórmula"),
+                    carregou && nome && !nome->hasFormula() && doc.read(5, 2).toString() == a.nome,
+                    doc.read(5, 2).toString());
+        r.verificar(QStringLiteral("matrícula começando com \"=\" é gravada como TEXTO, não como fórmula"),
+                    carregou && matricula && !matricula->hasFormula() && doc.read(5, 1).toString() == a.matricula);
+        const auto media = doc.cellAt(5, 4);
+        r.verificar(QStringLiteral("a coluna Média continua sendo fórmula (gerada pelo programa)"), carregou && media && media->hasFormula());
+    }
+
+    r.verificar(QStringLiteral("anexo: executáveis e scripts são recusados"),
+                ehArquivoExecutavel(QStringLiteral("C:/x/programa.EXE")) && ehArquivoExecutavel(QStringLiteral("a.ps1")) &&
+                    ehArquivoExecutavel(QStringLiteral("relatorio.pdf.exe")));
+    r.verificar(QStringLiteral("anexo: documentos do Office com macros e imagens de disco são recusados"),
+                ehArquivoExecutavel(QStringLiteral("planilha.xlsm")) && ehArquivoExecutavel(QStringLiteral("aula.docm")) &&
+                    ehArquivoExecutavel(QStringLiteral("jogo.iso")));
+    r.verificar(QStringLiteral("anexo: PDF, apresentação e planilha comuns continuam permitidos"),
+                !ehArquivoExecutavel(QStringLiteral("aula.pdf")) && !ehArquivoExecutavel(QStringLiteral("slides.pptx")) &&
+                    !ehArquivoExecutavel(QStringLiteral("notas.xlsx")) && !ehArquivoExecutavel(QStringLiteral("foto.png")));
 }
 
 }  // namespace
@@ -493,6 +673,8 @@ int executar(const QString &arquivoSaida)
 
         testeMigracaoDeCores(r, pasta.path());
         testeRecursosDoDesign(r);
+        testeContas(r, pasta.path());
+        testeSeguranca(r, pasta.path());
 
         // 2) As variantes só interessam como diagnóstico; rodam sempre, mas são
         //    obrigatórias apenas quando a abertura principal falhou.

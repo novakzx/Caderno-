@@ -11,6 +11,16 @@ public:
     // (Windows: %APPDATA%/ProfOrganizer/ProfOrganizer/professor.db).
     static QString caminhoPadrao();
 
+    // Banco da conta que está usando o programa (cada conta tem o seu arquivo). Enquanto
+    // nenhuma conta definir o caminho, vale o caminho padrão.
+    static QString caminhoAtual();
+    static void definirCaminhoAtual(const QString &caminho);
+
+    DatabaseManager() = default;
+    ~DatabaseManager();  // fecha a conexão (necessário para trocar de conta)
+    DatabaseManager(const DatabaseManager &) = delete;
+    DatabaseManager &operator=(const DatabaseManager &) = delete;
+
     // Abre (criando se necessário) e migra o banco. Retorna false em caso de erro.
     bool abrir(const QString &caminho);
 

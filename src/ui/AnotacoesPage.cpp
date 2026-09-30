@@ -107,10 +107,7 @@ AnotacoesPage::AnotacoesPage(Repositorios &repos, QWidget *parent)
 
     m_titulo = new QLineEdit;
     m_titulo->setPlaceholderText(QStringLiteral("Título"));
-    QFont fonteTitulo = m_titulo->font();
-    fonteTitulo.setPointSize(fonteTitulo.pointSize() + 3);
-    fonteTitulo.setBold(true);
-    m_titulo->setFont(fonteTitulo);
+    m_titulo->setObjectName(QStringLiteral("tituloEditor"));  // tamanho e peso vêm do QSS (ThemeManager)
     ed->addWidget(m_titulo);
 
     // Vínculos
@@ -133,10 +130,12 @@ AnotacoesPage::AnotacoesPage(Repositorios &repos, QWidget *parent)
     m_btnNegrito = criarBotao(QStringLiteral("N"), QStringLiteral("Negrito (Ctrl+B)"), true);
     m_btnItalico = criarBotao(QStringLiteral("I"), QStringLiteral("Itálico (Ctrl+I)"), true);
     m_btnSublinhado = criarBotao(QStringLiteral("S"), QStringLiteral("Sublinhado (Ctrl+U)"), true);
-    m_btnMarca = criarBotao(QStringLiteral("🖍"), QStringLiteral("Marca-texto"), true);
+    m_btnMarca = criarBotao(QString(), QStringLiteral("Marca-texto"), true);
+    ThemeManager::iconeNoBotao(m_btnMarca, QStringLiteral("marca-texto"), Tokens::Id::Ink, 18);
     auto *btnMarcadores = criarBotao(QStringLiteral("•"), QStringLiteral("Lista com marcadores"), false);
     auto *btnNumerada = criarBotao(QStringLiteral("1."), QStringLiteral("Lista numerada"), false);
-    auto *btnLimpar = criarBotao(QStringLiteral("⌫"), QStringLiteral("Limpar formatação da seleção"), false);
+    auto *btnLimpar = criarBotao(QString(), QStringLiteral("Limpar formatação da seleção"), false);
+    ThemeManager::iconeNoBotao(btnLimpar, QStringLiteral("limpar"), Tokens::Id::Ink, 18);
     QFont fn = m_btnNegrito->font(); fn.setBold(true); m_btnNegrito->setFont(fn);
     QFont fi = m_btnItalico->font(); fi.setItalic(true); m_btnItalico->setFont(fi);
     QFont fs = m_btnSublinhado->font(); fs.setUnderline(true); m_btnSublinhado->setFont(fs);

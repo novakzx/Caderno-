@@ -70,15 +70,20 @@ FrequenciaPage::FrequenciaPage(Repositorios &repos, QWidget *parent)
     lc->setContentsMargins(0, 12, 0, 0);
 
     auto *linhaData = new QHBoxLayout;
-    auto *btnAnterior = new QPushButton(QStringLiteral("◀"));
-    auto *btnProximo = new QPushButton(QStringLiteral("▶"));
+    auto *btnAnterior = new QPushButton;
+    auto *btnProximo = new QPushButton;
+    btnAnterior->setToolTip(QStringLiteral("Dia anterior"));
+    btnProximo->setToolTip(QStringLiteral("Próximo dia"));
+    ThemeManager::iconeNoBotao(btnAnterior, QStringLiteral("seta-esquerda"), Tokens::Id::Ink, 16);
+    ThemeManager::iconeNoBotao(btnProximo, QStringLiteral("seta-direita"), Tokens::Id::Ink, 16);
     auto *btnHoje = new QPushButton(QStringLiteral("Hoje"));
     m_data = new QDateEdit(QDate::currentDate());
     m_data->setCalendarPopup(true);
     m_data->setDisplayFormat(QStringLiteral("dddd, dd/MM/yyyy"));
     m_data->setLocale(ptBR());
-    m_btnTodosPresentes = new QPushButton(QStringLiteral("✔ Marcar todos como presentes"));
+    m_btnTodosPresentes = new QPushButton(QStringLiteral("Marcar todos como presentes"));
     m_btnTodosPresentes->setObjectName(QStringLiteral("primary"));
+    ThemeManager::iconeNoBotao(m_btnTodosPresentes, QStringLiteral("check"), Tokens::Id::OnPrimary);
     linhaData->addWidget(btnAnterior);
     linhaData->addWidget(m_data);
     linhaData->addWidget(btnProximo);
@@ -226,10 +231,10 @@ void FrequenciaPage::recarregarChamada()
     // Aviso de fim de semana / feriado (não impede a chamada).
     QString aviso;
     if (data.dayOfWeek() >= 6)
-        aviso = QStringLiteral("⚠ Este dia cai no fim de semana.");
+        aviso = QStringLiteral("Atenção: este dia cai no fim de semana.");
     const QString motivo = m_eventos.motivoDeDiaSemAula(data);
     if (!motivo.isEmpty())
-        aviso = QStringLiteral("⚠ Dia marcado como sem aula no calendário: %1.").arg(motivo);
+        aviso = QStringLiteral("Atenção: dia marcado como sem aula no calendário: %1.").arg(motivo);
     m_aviso->setText(aviso);
     m_aviso->setVisible(!aviso.isEmpty());
 

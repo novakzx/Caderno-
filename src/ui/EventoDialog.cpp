@@ -1,4 +1,5 @@
 #include "ui/EventoDialog.h"
+#include "ui/ThemeManager.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -24,11 +25,14 @@ EventoDialog::EventoDialog(const QList<Turma> &turmas, const Evento &inicial, bo
 
     // Valores gravados no banco e textos mostrados ao usuário.
     m_tipo = new QComboBox;
-    m_tipo->addItem(QStringLiteral("📝 Prova"), QStringLiteral("prova"));
-    m_tipo->addItem(QStringLiteral("🎉 Feriado"), QStringLiteral("feriado"));
-    m_tipo->addItem(QStringLiteral("🏖 Recesso escolar"), QStringLiteral("recesso"));
-    m_tipo->addItem(QStringLiteral("👥 Reunião"), QStringLiteral("reuniao"));
-    m_tipo->addItem(QStringLiteral("📌 Outro evento"), QStringLiteral("evento"));
+    auto icone = [](const char *nome) {
+        return ThemeManager::iconeColorido(QLatin1String(nome), Tokens::Id::InkMuted, 16);
+    };
+    m_tipo->addItem(icone("anotacoes"), QStringLiteral("Prova"), QStringLiteral("prova"));
+    m_tipo->addItem(icone("feriado"), QStringLiteral("Feriado"), QStringLiteral("feriado"));
+    m_tipo->addItem(icone("recesso"), QStringLiteral("Recesso escolar"), QStringLiteral("recesso"));
+    m_tipo->addItem(icone("turmas"), QStringLiteral("Reunião"), QStringLiteral("reuniao"));
+    m_tipo->addItem(icone("pin"), QStringLiteral("Outro evento"), QStringLiteral("evento"));
     const int idxTipo = m_tipo->findData(inicial.tipo);
     m_tipo->setCurrentIndex(idxTipo >= 0 ? idxTipo : 4);
 

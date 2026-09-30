@@ -87,9 +87,11 @@ void AnexosWidget::recarregar()
                 detalhe += QStringLiteral(" · aula: %1").arg(a.aulaTema);
 
             const bool existe = QFileInfo::exists(a.caminho);
-            auto *item = new QListWidgetItem(QStringLiteral("📎 %1\n%2%3")
+            auto *item = new QListWidgetItem(QStringLiteral("%1\n%2%3")
                                                  .arg(a.nome, detalhe,
                                                       existe ? QString() : QStringLiteral(" · ARQUIVO NÃO ENCONTRADO")));
+            item->setIcon(ThemeManager::iconeColorido(QStringLiteral("anexo"),
+                                                      existe ? Tokens::Id::InkMuted : Tokens::Id::Danger, 20));
             item->setData(Qt::UserRole, a.id);
             item->setData(Qt::UserRole + 1, a.caminho);
             item->setToolTip(a.caminho);

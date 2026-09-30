@@ -33,6 +33,8 @@ ImportarNotasDialog::ImportarNotasDialog(const QList<Avaliacao> &avaliacoesDaTur
                          .arg(total);
     if (!plano.alunosNaoEncontrados.isEmpty()) {
         QStringList amostra = plano.alunosNaoEncontrados.mid(0, 8);
+        for (QString &nome : amostra)
+            nome = nome.toHtmlEscaped();  // vêm da planilha: nunca como HTML
         resumo += QStringLiteral("<br>Não encontrados (serão ignorados): %1%2")
                       .arg(amostra.join(QStringLiteral(", ")),
                            plano.alunosNaoEncontrados.size() > 8 ? QStringLiteral(" …") : QString());
@@ -73,7 +75,8 @@ ImportarNotasDialog::ImportarNotasDialog(const QList<Avaliacao> &avaliacoesDaTur
         m_tabela->setItem(i, 1, itemNome);
 
         auto *combo = new QComboBox;
-        combo->addItem(QStringLiteral("➕ Criar avaliação nova (peso %1, máx %2, %3º período)")
+        combo->addItem(ThemeManager::iconeColorido(QStringLiteral("mais"), Tokens::Id::Ink, 16),
+                       QStringLiteral("Criar avaliação nova (peso %1, máx %2, %3º período)")
                            .arg(numero(col.peso), numero(col.notaMaxima))
                            .arg(col.periodo),
                        0);

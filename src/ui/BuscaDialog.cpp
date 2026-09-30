@@ -1,4 +1,5 @@
 #include "ui/BuscaDialog.h"
+#include "ui/ThemeManager.h"
 
 #include "core/TextoUtil.h"
 
@@ -13,18 +14,20 @@ namespace {
 
 constexpr int kMaximoDeResultados = 40;
 
-QString emoji(TipoBusca tipo)
+// Ícone de cada tipo de resultado (resources/icons).
+QIcon iconeDoTipo(TipoBusca tipo)
 {
+    const char *nome = "pin";
     switch (tipo) {
-    case TipoBusca::Turma:    return QStringLiteral("👥");
-    case TipoBusca::Aluno:    return QStringLiteral("🧑‍🎓");
-    case TipoBusca::Anotacao: return QStringLiteral("📝");
-    case TipoBusca::Aula:     return QStringLiteral("📚");
-    case TipoBusca::Tarefa:   return QStringLiteral("✅");
-    case TipoBusca::Evento:   return QStringLiteral("📅");
-    case TipoBusca::Anexo:    return QStringLiteral("📎");
+    case TipoBusca::Turma:    nome = "turmas"; break;
+    case TipoBusca::Aluno:    nome = "aluno"; break;
+    case TipoBusca::Anotacao: nome = "anotacoes"; break;
+    case TipoBusca::Aula:     nome = "aulas"; break;
+    case TipoBusca::Tarefa:   nome = "tarefa-ok"; break;
+    case TipoBusca::Evento:   nome = "calendario"; break;
+    case TipoBusca::Anexo:    nome = "anexo"; break;
     }
-    return QString();
+    return ThemeManager::iconeColorido(QLatin1String(nome), Tokens::Id::InkMuted, 20);
 }
 
 // Em empates, turmas e alunos vêm antes dos demais.
@@ -54,9 +57,7 @@ BuscaDialog::BuscaDialog(BuscaRepository &busca, QWidget *parent) : QDialog(pare
     m_campo = new QLineEdit;
     m_campo->setPlaceholderText(QStringLiteral("Buscar turmas, alunos, anotações, aulas, tarefas, eventos, arquivos…"));
     m_campo->setClearButtonEnabled(true);
-    QFont f = m_campo->font();
-    f.setPointSize(f.pointSize() + 2);
-    m_campo->setFont(f);
+    m_campo->setObjectName(QStringLiteral("campoBusca"));  // tamanho vem do QSS (ThemeManager)
     m_campo->installEventFilter(this);  // para as setas ↑/↓ moverem a seleção
 
     m_lista = new QListWidget;
@@ -128,7 +129,8 @@ void BuscaDialog::filtrar()
     for (int i = 0; i < std::min<int>(total, kMaximoDeResultados); ++i) {
         const ItemBusca &item = *acertos.at(i).item;
         m_resultados.append(item);
-        m_lista->addItem(QStringLiteral("%1  %2\n      %3").arg(emoji(item.tipo), item.titulo, item.subtitulo));
+        m_lista->addItem(new QListWidgetItem(iconeDoTipo(item.tipo),
+                                             QStringLiteral("%1\n%2").arg(item.titulo, item.subtitulo)));
     }
     if (!m_resultados.isEmpty())
         m_lista->setCurrentRow(0);

@@ -8,13 +8,21 @@ on:
   push:
   workflow_dispatch:
 
+# O token do workflow só pode LER o repositório (princípio do menor privilégio).
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
+      # Ações de terceiros fixadas pelo hash do commit (o comentário diz a versão): uma mudança futura
+      # na versão "v4" não entra no nosso build sem a gente ver.
       - name: Baixar o código
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
 
       # O QXlsx (importar/exportar Excel) fica em third_party/QXlsx, como o CMakeLists.txt espera.
       # Se você já incluiu essa pasta no repositório, este passo não faz nada.
@@ -22,11 +30,18 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path third_party/QXlsx/QXlsx/CMakeLists.txt)) {
-            git clone --depth 1 https://github.com/QtExcel/QXlsx third_party/QXlsx
+            # Versão fixa (hash do commit), não "o que estiver no master": evita que uma alteração
+            # futura (ou maliciosa) no repositório do QXlsx entre no nosso build.
+            $qxlsx = "4e82d6c0726dcc39020cc5491d0de77f787c18ef"
+            git init third_party/QXlsx
+            git -C third_party/QXlsx fetch --depth 1 https://github.com/QtExcel/QXlsx $qxlsx
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            git -C third_party/QXlsx checkout --detach FETCH_HEAD
+            if ($LASTEXITCODE -ne 0) { exit 1 }
           }
 
       - name: Instalar o Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125  # v4.4.1
         with:
           version: "6.8.*"
           host: windows
@@ -116,7 +131,7 @@ jobs:
 
       - name: Publicar o resultado
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: ${{ steps.nome.outputs.pacote }}
           path: dist/ProfOrganizer

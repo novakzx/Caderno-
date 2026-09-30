@@ -28,15 +28,28 @@ const QLocale &ptBR()
     return pt;
 }
 
-QString emoji(const QString &categoria)
+// Nome e ícone de cada categoria de item do calendário.
+QString rotuloDaCategoria(const QString &categoria)
 {
-    if (categoria == QLatin1String("prova")) return QStringLiteral("📝");
-    if (categoria == QLatin1String("feriado")) return QStringLiteral("🎉");
-    if (categoria == QLatin1String("recesso")) return QStringLiteral("🏖");
-    if (categoria == QLatin1String("reuniao")) return QStringLiteral("👥");
-    if (categoria == QLatin1String("tarefa")) return QStringLiteral("✅");
-    if (categoria == QLatin1String("avaliacao")) return QStringLiteral("📊");
-    return QStringLiteral("📌");
+    if (categoria == QLatin1String("prova")) return QStringLiteral("Prova");
+    if (categoria == QLatin1String("feriado")) return QStringLiteral("Feriado");
+    if (categoria == QLatin1String("recesso")) return QStringLiteral("Recesso");
+    if (categoria == QLatin1String("reuniao")) return QStringLiteral("Reunião");
+    if (categoria == QLatin1String("tarefa")) return QStringLiteral("Tarefa");
+    if (categoria == QLatin1String("avaliacao")) return QStringLiteral("Avaliação");
+    return QStringLiteral("Evento");
+}
+
+QIcon iconeDaCategoria(const QString &categoria)
+{
+    const char *nome = "pin";
+    if (categoria == QLatin1String("prova")) nome = "anotacoes";
+    else if (categoria == QLatin1String("feriado")) nome = "feriado";
+    else if (categoria == QLatin1String("recesso")) nome = "recesso";
+    else if (categoria == QLatin1String("reuniao")) nome = "turmas";
+    else if (categoria == QLatin1String("tarefa")) nome = "tarefa-ok";
+    else if (categoria == QLatin1String("avaliacao")) nome = "notas";
+    return ThemeManager::iconeColorido(QLatin1String(nome), Tokens::Id::InkMuted, 18);
 }
 
 bool ehEvento(const QString &categoria)
@@ -173,7 +186,7 @@ void CalendarioPage::carregarPeriodoVisivel()
         bool feriado = false, prova = false, evento = false, tarefa = false;
         QStringList dicas;
         for (const ItemDia &item : it.value()) {
-            dicas << QStringLiteral("%1 %2").arg(emoji(item.categoria), item.texto);
+            dicas << QStringLiteral("%1: %2").arg(rotuloDaCategoria(item.categoria), item.texto);
             if (item.categoria == QLatin1String("feriado") || item.categoria == QLatin1String("recesso")) feriado = true;
             else if (item.categoria == QLatin1String("prova")) prova = true;
             else if (item.categoria == QLatin1String("tarefa")) tarefa = true;
@@ -215,7 +228,7 @@ void CalendarioPage::mostrarDiaSelecionado()
         m_lista->addItem(vazio);
     }
     for (const ItemDia &item : m_itensDoDia)
-        m_lista->addItem(QStringLiteral("%1  %2").arg(emoji(item.categoria), item.texto));
+        m_lista->addItem(new QListWidgetItem(iconeDaCategoria(item.categoria), item.texto));
     atualizarBotoes();
 }
 

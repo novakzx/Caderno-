@@ -7,12 +7,15 @@
 #include "ui/AnotacoesPage.h"
 #include "ui/AulasPage.h"
 #include "ui/BackupDialog.h"
+#include "ui/BarraDeTitulo.h"
+#include "ui/BotoesAnimados.h"
 #include "ui/BuscaDialog.h"
 #include "ui/CalendarioPage.h"
 #include "ui/FrequenciaPage.h"
 #include "ui/HojePage.h"
 #include "ui/HorarioPage.h"
 #include "ui/NotasPage.h"
+#include "ui/PilhaAnimada.h"
 #include "ui/RelatoriosPage.h"
 #include "ui/TarefasPage.h"
 #include "ui/ThemeManager.h"
@@ -20,29 +23,36 @@
 
 #include <QButtonGroup>
 #include <QCloseEvent>
+#include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
-#include <QPushButton>
+#include <QMouseEvent>
 #include <QSettings>
 #include <QShortcut>
-#include <QStackedWidget>
-#include <QSize>
 #include <QStatusBar>
+#include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWindow>
 #include <utility>
 
 namespace {
 constexpr int kIntervaloBackupHoras = BackupService::kIntervaloPadraoHoras;  // backup automático: a cada 24 h
 constexpr int kIntervaloBackupAoFecharHoras = 12;                            // e ao fechar, se o último tiver mais de 12 h
+constexpr int kLarguraDaBorda = 6;                                           // faixa (px) em que o mouse redimensiona
 }  // namespace
 
-MainWindow::MainWindow(Repositorios &repos, QWidget *parent) : QMainWindow(parent), m_repos(repos)
+MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QString &emailUsuario, QWidget *parent)
+    : QMainWindow(parent), m_repos(repos)
 {
-    setWindowTitle(QStringLiteral("Caderno+ — %1").arg(identificacaoDoBuild()));
+    setObjectName(QStringLiteral("janela"));
+    setWindowFlag(Qt::FramelessWindowHint, true);  // sem a barra de título do sistema
+    setWindowTitle(QStringLiteral("Caderno+"));    // aparece só na barra de tarefas
     resize(1280, 820);
     setMinimumSize(1000, 680);
+    statusBar()->setSizeGripEnabled(false);
 
     auto *central = new QWidget;
     auto *layoutRaiz = new QHBoxLayout(central);
@@ -55,13 +65,21 @@ MainWindow::MainWindow(Repositorios &repos, QWidget *parent) : QMainWindow(paren
     barra->setFixedWidth(220);
     // QWidget "puro" só pinta o fundo do QSS com este atributo ligado.
     barra->setAttribute(Qt::WA_StyledBackground, true);
-    construirBarraLateral(barra);
+    construirBarraLateral(barra, nomeUsuario, emailUsuario);
 
-    // --- Área de conteúdo ---
-    m_paginas = new QStackedWidget;
+    // --- Coluna da direita: barra de título + conteúdo ---
+    auto *coluna = new QWidget;
+    auto *layoutColuna = new QVBoxLayout(coluna);
+    layoutColuna->setContentsMargins(0, 0, 0, 0);
+    layoutColuna->setSpacing(0);
+    m_barraTitulo = new BarraDeTitulo;
+    m_barraTitulo->definirTexto(identificacaoDoBuild());
+    m_paginas = new PilhaAnimada;
+    layoutColuna->addWidget(m_barraTitulo);
+    layoutColuna->addWidget(m_paginas, 1);
 
     layoutRaiz->addWidget(barra);
-    layoutRaiz->addWidget(m_paginas, 1);
+    layoutRaiz->addWidget(coluna, 1);
     setCentralWidget(central);
 
     // --- Seções (na ordem da barra lateral) ---
@@ -122,21 +140,41 @@ MainWindow::MainWindow(Repositorios &repos, QWidget *parent) : QMainWindow(paren
 
     statusBar()->showMessage(QStringLiteral("Pronto · Ctrl+K busca em tudo"), 4000);
 
+    // Como não há moldura, as bordas da janela são tratadas aqui (cursor e redimensionar).
+    qApp->installEventFilter(this);
+
     // Reabre na última seção visitada (na primeira vez, abre o painel "Hoje").
     const int ultima = QSettings().value(QStringLiteral("ultimaSecao"), 0).toInt();
     irParaSecao(qBound(0, ultima, m_paginas->count() - 1));
 }
 
-void MainWindow::construirBarraLateral(QWidget *barra)
+MainWindow::~MainWindow()
+{
+    qApp->removeEventFilter(this);
+    if (m_cursorDeBorda)
+        QGuiApplication::restoreOverrideCursor();
+}
+
+BotaoNav *MainWindow::novoBotaoDoRodape(const QString &icone, const QString &texto)
+{
+    auto *botao = new BotaoNav(texto, icone);
+    botao->setCheckable(false);
+    m_botoesNav.append(botao);
+    return botao;
+}
+
+void MainWindow::construirBarraLateral(QWidget *barra, const QString &nomeUsuario, const QString &emailUsuario)
 {
     auto *layout = new QVBoxLayout(barra);
     layout->setContentsMargins(0, 0, 0, 12);
     layout->setSpacing(0);
 
     // Assinatura do design: nome em Figtree Bold, com o "+" em ocre (texto refeito quando o tema muda).
+    // Também serve para arrastar a janela.
     m_titulo = new QLabel;
     m_titulo->setObjectName(QStringLiteral("appTitle"));
     m_titulo->setTextFormat(Qt::RichText);
+    m_titulo->installEventFilter(this);
     layout->addWidget(m_titulo);
 
     // Os botões de navegação ficam num layout próprio; adicionarSecao() os insere aqui.
@@ -148,25 +186,53 @@ void MainWindow::construirBarraLateral(QWidget *barra)
     layout->addStretch(1);
 
     // Ações fixas no rodapé: busca, backup, tema.
-    auto *botaoBusca = new QPushButton(QStringLiteral("Buscar  (Ctrl+K)"));
-    botaoBusca->setObjectName(QStringLiteral("footerButton"));
-    registrarIcone(botaoBusca, QStringLiteral("busca"));
-    botaoBusca->setCursor(Qt::PointingHandCursor);
-    connect(botaoBusca, &QPushButton::clicked, this, &MainWindow::abrirBusca);
+    auto *botaoBusca = novoBotaoDoRodape(QStringLiteral("busca"), QStringLiteral("Buscar  (Ctrl+K)"));
+    connect(botaoBusca, &QAbstractButton::clicked, this, &MainWindow::abrirBusca);
     layout->addWidget(botaoBusca);
 
-    auto *botaoBackup = new QPushButton(QStringLiteral("Backup"));
-    botaoBackup->setObjectName(QStringLiteral("footerButton"));
-    registrarIcone(botaoBackup, QStringLiteral("backup"));
-    botaoBackup->setCursor(Qt::PointingHandCursor);
-    connect(botaoBackup, &QPushButton::clicked, this, &MainWindow::abrirBackup);
+    auto *botaoBackup = novoBotaoDoRodape(QStringLiteral("backup"), QStringLiteral("Backup"));
+    connect(botaoBackup, &QAbstractButton::clicked, this, &MainWindow::abrirBackup);
     layout->addWidget(botaoBackup);
 
-    m_botaoTema = new QPushButton;
-    m_botaoTema->setObjectName(QStringLiteral("themeButton"));
-    m_botaoTema->setCursor(Qt::PointingHandCursor);
-    connect(m_botaoTema, &QPushButton::clicked, this, [] { ThemeManager::alternar(); });
+    m_botaoTema = novoBotaoDoRodape(QStringLiteral("lua"), QStringLiteral("Modo escuro"));
+    connect(m_botaoTema, &QAbstractButton::clicked, this, [] { ThemeManager::alternar(); });
     layout->addWidget(m_botaoTema);
+
+    // Conta conectada + Sair
+    auto *divisor = new QFrame;
+    divisor->setObjectName(QStringLiteral("divisor"));
+    layout->addWidget(divisor);
+
+    auto *linhaConta = new QHBoxLayout;
+    linhaConta->setContentsMargins(16, 4, 12, 4);
+    linhaConta->setSpacing(10);
+    auto *avatar = new QLabel(nomeUsuario.trimmed().left(1).toUpper());
+    avatar->setObjectName(QStringLiteral("avatar"));
+    avatar->setAlignment(Qt::AlignCenter);
+    auto *textos = new QVBoxLayout;
+    textos->setSpacing(0);
+    auto *nome = new QLabel(nomeUsuario);
+    nome->setObjectName(QStringLiteral("nomeUsuario"));
+    nome->setTextFormat(Qt::PlainText);
+    nome->setToolTip(nomeUsuario);
+    auto *email = new QLabel(emailUsuario);
+    email->setObjectName(QStringLiteral("emailUsuario"));
+    email->setTextFormat(Qt::PlainText);
+    email->setToolTip(emailUsuario);
+    nome->setMinimumWidth(10);
+    email->setMinimumWidth(10);
+    textos->addWidget(nome);
+    textos->addWidget(email);
+    linhaConta->addWidget(avatar);
+    linhaConta->addLayout(textos, 1);
+    layout->addLayout(linhaConta);
+
+    auto *botaoSair = novoBotaoDoRodape(QStringLiteral("sair"), QStringLiteral("Sair da conta"));
+    connect(botaoSair, &QAbstractButton::clicked, this, [this] {
+        emit trocarContaSolicitado();
+        close();
+    });
+    layout->addWidget(botaoSair);
 
     m_grupoNavegacao = new QButtonGroup(this);
     m_grupoNavegacao->setExclusive(true);
@@ -177,10 +243,8 @@ void MainWindow::adicionarSecao(const QString &icone, const QString &titulo, QWi
 {
     const int indice = m_paginas->addWidget(pagina);
 
-    auto *botao = new QPushButton(titulo);
-    registrarIcone(botao, icone);
-    botao->setCheckable(true);
-    botao->setCursor(Qt::PointingHandCursor);
+    auto *botao = new BotaoNav(titulo, icone);
+    m_botoesNav.append(botao);
     m_grupoNavegacao->addButton(botao, indice);  // o id do botão = índice da página
     m_layoutNavegacao->addWidget(botao);
 }
@@ -189,7 +253,7 @@ void MainWindow::irParaSecao(int indice)
 {
     if (indice < 0 || indice >= m_paginas->count())
         return;
-    m_paginas->setCurrentIndex(indice);
+    m_paginas->irPara(indice);  // com fade
     if (auto *botao = m_grupoNavegacao->button(indice))
         botao->setChecked(true);
     QSettings().setValue(QStringLiteral("ultimaSecao"), indice);
@@ -200,25 +264,106 @@ void MainWindow::irParaPagina(QWidget *pagina)
     irParaSecao(m_paginas->indexOf(pagina));
 }
 
-void MainWindow::registrarIcone(QPushButton *botao, const QString &icone)
-{
-    botao->setIconSize(QSize(20, 20));
-    m_iconesDosBotoes.append({botao, icone});
-}
-
-// Refaz o que depende das cores do tema: ícones SVG, assinatura e botão de tema.
+// Refaz o que depende das cores do tema: ícones, assinatura e botão de tema.
 // Roda na criação da janela e sempre que o tema muda.
 void MainWindow::atualizarAparencia()
 {
-    for (const auto &par : std::as_const(m_iconesDosBotoes))
-        par.first->setIcon(ThemeManager::icone(par.second));
-
     m_titulo->setText(QStringLiteral("Caderno<span style=\"color:%1\">+</span>")
                           .arg(ThemeManager::corHex(Tokens::Id::Accent)));
 
     const bool claro = ThemeManager::atual() == ThemeManager::Tema::Claro;
     m_botaoTema->setText(claro ? QStringLiteral("Modo escuro") : QStringLiteral("Modo claro"));
-    m_botaoTema->setIcon(ThemeManager::icone(claro ? QStringLiteral("lua") : QStringLiteral("sol")));
+    m_botaoTema->definirIcone(claro ? QStringLiteral("lua") : QStringLiteral("sol"));
+
+    for (BotaoNav *botao : std::as_const(m_botoesNav))
+        botao->recarregarIcones();
+}
+
+// ============================================================================
+// Janela sem moldura: arrastar pelo título e redimensionar pelas bordas
+// ============================================================================
+
+Qt::Edges MainWindow::bordaEm(const QPoint &p) const
+{
+    Qt::Edges borda;
+    if (isMaximized() || isFullScreen())
+        return borda;
+    const QRect r = frameGeometry();
+    if (!r.adjusted(-2, -2, 2, 2).contains(p))
+        return borda;
+    if (p.x() <= r.left() + kLarguraDaBorda) borda |= Qt::LeftEdge;
+    if (p.x() >= r.right() - kLarguraDaBorda) borda |= Qt::RightEdge;
+    if (p.y() <= r.top() + kLarguraDaBorda) borda |= Qt::TopEdge;
+    if (p.y() >= r.bottom() - kLarguraDaBorda) borda |= Qt::BottomEdge;
+    return borda;
+}
+
+void MainWindow::atualizarCursorDaBorda(Qt::Edges borda)
+{
+    if (!borda) {
+        if (m_cursorDeBorda)
+            QGuiApplication::restoreOverrideCursor();
+        m_cursorDeBorda = false;
+        return;
+    }
+    Qt::CursorShape forma = Qt::SizeFDiagCursor;
+    const bool horizontal = borda & (Qt::LeftEdge | Qt::RightEdge);
+    const bool vertical = borda & (Qt::TopEdge | Qt::BottomEdge);
+    if (horizontal && !vertical)
+        forma = Qt::SizeHorCursor;
+    else if (vertical && !horizontal)
+        forma = Qt::SizeVerCursor;
+    else if ((borda & Qt::LeftEdge && borda & Qt::BottomEdge) || (borda & Qt::RightEdge && borda & Qt::TopEdge))
+        forma = Qt::SizeBDiagCursor;
+
+    if (m_cursorDeBorda)
+        QGuiApplication::changeOverrideCursor(QCursor(forma));
+    else
+        QGuiApplication::setOverrideCursor(QCursor(forma));
+    m_cursorDeBorda = true;
+}
+
+bool MainWindow::eventFilter(QObject *objeto, QEvent *evento)
+{
+    // Clicar na assinatura "Caderno+" arrasta a janela (como a barra de título).
+    if (objeto == m_titulo && evento->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(evento);
+        if (mouse->button() == Qt::LeftButton && windowHandle()) {
+            windowHandle()->startSystemMove();
+            return true;
+        }
+    }
+
+    // Bordas: só para widgets desta janela (diálogos têm a própria moldura).
+    const QEvent::Type tipo = evento->type();
+    if ((tipo == QEvent::MouseMove || tipo == QEvent::MouseButtonPress) && objeto->isWidgetType()) {
+        auto *widget = static_cast<QWidget *>(objeto);
+        if (widget->window() == this) {
+            auto *mouse = static_cast<QMouseEvent *>(evento);
+            const Qt::Edges borda = bordaEm(mouse->globalPosition().toPoint());
+            if (tipo == QEvent::MouseMove && !(mouse->buttons() & Qt::LeftButton))
+                atualizarCursorDaBorda(borda);
+            if (tipo == QEvent::MouseButtonPress && mouse->button() == Qt::LeftButton && borda && windowHandle()) {
+                windowHandle()->startSystemResize(borda);
+                return true;
+            }
+        }
+    } else if (tipo == QEvent::Leave && objeto == this) {
+        atualizarCursorDaBorda({});
+    }
+    return QMainWindow::eventFilter(objeto, evento);
+}
+
+void MainWindow::changeEvent(QEvent *evento)
+{
+    if (evento->type() == QEvent::WindowStateChange && m_barraTitulo) {
+        const bool maximizada = isMaximized();
+        m_barraTitulo->definirMaximizada(maximizada);
+        setProperty("maximizada", maximizada);  // o QSS tira a borda quando maximizada
+        style()->unpolish(this);
+        style()->polish(this);
+    }
+    QMainWindow::changeEvent(evento);
 }
 
 // ============================================================================

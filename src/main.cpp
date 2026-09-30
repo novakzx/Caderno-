@@ -16,12 +16,15 @@
 #include "core/BuildInfo.h"
 #include "services/AutoTeste.h"
 #include "services/BackupService.h"
+#include "services/ContaService.h"
+#include "ui/LoginDialog.h"
 #include "ui/MainWindow.h"
 #include "ui/ThemeManager.h"
 
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QIcon>
 #include <QMessageBox>
 
@@ -48,53 +51,81 @@ int main(int argc, char *argv[])
     ThemeManager::carregarFontes();
     ThemeManager::carregarSalvo();
 
-    // Restauração de backup pendente (pedida na sessão anterior): precisa acontecer
-    // ANTES de abrir o banco, pois troca o arquivo do banco.
-    const QString caminhoBanco = DatabaseManager::caminhoPadrao();
-    if (BackupService::restauracaoPendente(caminhoBanco)) {
-        QString erroRestauracao;
-        if (BackupService::aplicarRestauracaoPendente(caminhoBanco, &erroRestauracao))
-            QMessageBox::information(nullptr, QStringLiteral("Backup restaurado"),
-                                     QStringLiteral("Os dados do backup foram restaurados.\n\n"
-                                                    "Os dados anteriores foram guardados na pasta de dados do programa, "
-                                                    "em um arquivo \"antes-da-restauracao\"."));
-        else
-            QMessageBox::warning(nullptr, QStringLiteral("Restauração não aplicada"),
-                                 QStringLiteral("Não foi possível restaurar o backup. Seus dados atuais foram mantidos.\n\n%1")
-                                     .arg(erroRestauracao));
-    }
-
-    // Abre o banco e aplica as migrações pendentes antes de criar qualquer tela.
-    DatabaseManager banco;
-    if (!banco.abrir(caminhoBanco)) {
-        QMessageBox::critical(nullptr, QStringLiteral("Erro no banco de dados"),
-                              QStringLiteral("Não foi possível abrir o banco de dados:\n\n%1\n\n"
-                                             "Versão: %2\nArquivo: %3")
-                                  .arg(banco.ultimoErro(), identificacaoDoBuild(),
-                                       QDir::toNativeSeparators(caminhoBanco)));
+    // Contas locais (login). O cadastro fica em contas.db, na pasta de dados do programa.
+    const QString pastaBase = QFileInfo(DatabaseManager::caminhoPadrao()).absolutePath();
+    ContaService contas(pastaBase);
+    if (!contas.disponivel()) {
+        QMessageBox::critical(nullptr, QStringLiteral("Erro no cadastro de contas"),
+                              QStringLiteral("Não foi possível abrir o cadastro de contas:\n\n%1\n\nVersão: %2\nPasta: %3")
+                                  .arg(contas.erroDeAbertura(), identificacaoDoBuild(), QDir::toNativeSeparators(pastaBase)));
         return 1;
     }
 
-    // Os repositórios são criados aqui e injetados nas telas (widgets não
-    // criam nem conhecem o banco).
-    TurmaRepository turmas;
-    AlunoRepository alunos;
-    AvaliacaoRepository avaliacoes;
-    NotaRepository notas;
-    HorarioRepository horarios;
-    TarefaRepository tarefas;
-    AgendaRepository agenda;
-    AulaRepository aulas;
-    AnexoRepository anexos;
-    AnotacaoRepository anotacoes;
-    FrequenciaRepository frequencia;
-    EventoRepository eventos;
-    BuscaRepository busca;
-    Repositorios repos{turmas, alunos, avaliacoes, notas, horarios, tarefas, agenda,
-                       aulas, anexos, anotacoes, frequencia, eventos, busca};
+    // Uma "sessão" por conta: login -> janela principal. "Sair da conta" volta ao login.
+    for (;;) {
+        // Se já existe um banco de antes das contas, a primeira conta criada vai ficar com ele.
+        const bool haDadosAntigos = !contas.temContas() && QFileInfo::exists(DatabaseManager::caminhoPadrao());
+        LoginDialog login(contas, haDadosAntigos);
+        if (login.exec() != QDialog::Accepted)
+            return 0;
+        const Conta conta = login.conta();
 
-    MainWindow janela(repos);
-    janela.show();
+        const QString caminhoBanco = contas.caminhoDosDados(conta);
+        DatabaseManager::definirCaminhoAtual(caminhoBanco);
 
-    return app.exec();
+        // Restauração de backup pendente (pedida na sessão anterior): precisa acontecer
+        // ANTES de abrir o banco, pois troca o arquivo do banco.
+        if (BackupService::restauracaoPendente(caminhoBanco)) {
+            QString erroRestauracao;
+            if (BackupService::aplicarRestauracaoPendente(caminhoBanco, &erroRestauracao))
+                QMessageBox::information(nullptr, QStringLiteral("Backup restaurado"),
+                                         QStringLiteral("Os dados do backup foram restaurados.\n\n"
+                                                        "Os dados anteriores foram guardados na pasta de dados do programa, "
+                                                        "em um arquivo \"antes-da-restauracao\"."));
+            else
+                QMessageBox::warning(nullptr, QStringLiteral("Restauração não aplicada"),
+                                     QStringLiteral("Não foi possível restaurar o backup. Seus dados atuais foram mantidos.\n\n%1")
+                                         .arg(erroRestauracao));
+        }
+
+        // Abre o banco e aplica as migrações pendentes antes de criar qualquer tela.
+        DatabaseManager banco;
+        if (!banco.abrir(caminhoBanco)) {
+            QMessageBox::critical(nullptr, QStringLiteral("Erro no banco de dados"),
+                                  QStringLiteral("Não foi possível abrir o banco de dados:\n\n%1\n\n"
+                                                 "Versão: %2\nArquivo: %3")
+                                      .arg(banco.ultimoErro(), identificacaoDoBuild(),
+                                           QDir::toNativeSeparators(caminhoBanco)));
+            return 1;
+        }
+
+        // Os repositórios são criados aqui e injetados nas telas (widgets não
+        // criam nem conhecem o banco).
+        TurmaRepository turmas;
+        AlunoRepository alunos;
+        AvaliacaoRepository avaliacoes;
+        NotaRepository notas;
+        HorarioRepository horarios;
+        TarefaRepository tarefas;
+        AgendaRepository agenda;
+        AulaRepository aulas;
+        AnexoRepository anexos;
+        AnotacaoRepository anotacoes;
+        FrequenciaRepository frequencia;
+        EventoRepository eventos;
+        BuscaRepository busca;
+        Repositorios repos{turmas, alunos, avaliacoes, notas, horarios, tarefas, agenda,
+                           aulas, anexos, anotacoes, frequencia, eventos, busca};
+
+        MainWindow janela(repos, conta.nome, conta.email);
+        bool trocarDeConta = false;
+        QObject::connect(&janela, &MainWindow::trocarContaSolicitado, [&trocarDeConta] { trocarDeConta = true; });
+        janela.show();
+
+        app.exec();
+        if (!trocarDeConta)
+            break;
+        // (a janela, os repositórios e o banco são destruídos aqui, antes do próximo login)
+    }
+    return 0;
 }

@@ -26,7 +26,7 @@ QString nomeDoBackup(const QDateTime &quando)
 
 QString pastaDeBackups()
 {
-    const QString pasta = QFileInfo(DatabaseManager::caminhoPadrao()).absolutePath() + QStringLiteral("/backups");
+    const QString pasta = QFileInfo(DatabaseManager::caminhoAtual()).absolutePath() + QStringLiteral("/backups");
     QDir().mkpath(pasta);
     return pasta;
 }
@@ -108,6 +108,8 @@ bool validarArquivo(const QString &arquivo, QString *erro)
             problema = db.lastError().text();
         } else {
             QSqlQuery q(db);
+            q.exec(QStringLiteral("PRAGMA trusted_schema = OFF"));  // arquivo de fora: não confiar em views/gatilhos
+            q.finish();
             if (!q.exec(QStringLiteral("PRAGMA quick_check")) || !q.next()) {
                 problema = QStringLiteral("O arquivo não é um banco de dados válido.");
             } else if (q.value(0).toString() != QLatin1String("ok")) {

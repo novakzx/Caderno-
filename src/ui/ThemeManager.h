@@ -5,8 +5,10 @@
 #include <QColor>
 #include <QIcon>
 #include <QObject>
+#include <QPixmap>
 #include <QString>
 
+class QAbstractButton;
 class QWidget;
 
 // Avisa as telas quando o tema claro/escuro muda (para refazerem o que guardam com cor).
@@ -60,11 +62,18 @@ public:
     static QIcon icone(const QString &nome, int tamanho = 20);
     static QIcon iconeColorido(const QString &nome, Tokens::Id token, int tamanho = 16);
     static QIcon iconeColorido(const QString &nome, const QColor &cor, int tamanho = 16);
+    // Desenha o ícone numa cor (nítido em telas de alta densidade).
+    static QPixmap pixmap(const QString &nome, const QColor &cor, int tamanho);
+    // Põe um ícone num botão e o mantém na cor certa quando o tema muda
+    // (use OnPrimary em botões "primary").
+    static void iconeNoBotao(QAbstractButton *botao, const QString &nome, Tokens::Id cor = Tokens::Id::Ink,
+                             int tamanho = 16);
 
     // Marca um QLabel/QWidget com um estado (a cor vem do QSS e muda junto com o tema).
     static void definirEstado(QWidget *widget, Estado estado);
 
 private:
     static QString montarFolhaDeEstilo(Tema tema);
+    static QString prepararImagensDoQss(Tema tema);
     static void aplicarFonte();
 };

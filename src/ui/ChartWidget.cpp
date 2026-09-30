@@ -65,7 +65,7 @@ void ChartWidget::paintEvent(QPaintEvent *)
     // Título
     QFont negrito = font();
     negrito.setBold(true);
-    negrito.setPointSize(font().pointSize() + 1);
+    negrito.setPixelSize(16);  // título do gráfico (a fonte do app é em pixels)
     p.setFont(negrito);
     p.setPen(c.texto);
     p.drawText(QRect(16, 8, width() - 32, 26), Qt::AlignLeft | Qt::AlignVCenter, m_titulo);

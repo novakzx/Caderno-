@@ -1,4 +1,5 @@
 #include "ui/BackupDialog.h"
+#include "ui/ThemeManager.h"
 
 #include "database/DatabaseManager.h"
 #include "services/BackupService.h"
@@ -48,8 +49,9 @@ BackupDialog::BackupDialog(QWidget *parent) : QDialog(parent)
     m_lista = new QListWidget;
     m_lista->setAlternatingRowColors(true);
 
-    auto *btnAgora = new QPushButton(QStringLiteral("💾 Fazer backup agora"));
+    auto *btnAgora = new QPushButton(QStringLiteral("Fazer backup agora"));
     btnAgora->setObjectName(QStringLiteral("primary"));
+    ThemeManager::iconeNoBotao(btnAgora, QStringLiteral("backup"), Tokens::Id::OnPrimary);
     auto *btnCopia = new QPushButton(QStringLiteral("Salvar uma cópia em…"));
     m_btnRestaurar = new QPushButton(QStringLiteral("Restaurar o selecionado…"));
     auto *btnArquivo = new QPushButton(QStringLiteral("Restaurar de um arquivo…"));
@@ -165,7 +167,7 @@ void BackupDialog::agendarRestauracao(const QString &arquivo)
         return;
 
     QString erro;
-    if (!BackupService::agendarRestauracao(arquivo, DatabaseManager::caminhoPadrao(), &erro)) {
+    if (!BackupService::agendarRestauracao(arquivo, DatabaseManager::caminhoAtual(), &erro)) {
         QMessageBox::critical(this, QStringLiteral("Não foi possível restaurar"), erro);
         return;
     }

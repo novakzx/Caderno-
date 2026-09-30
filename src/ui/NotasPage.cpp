@@ -69,8 +69,10 @@ NotasPage::NotasPage(TurmaRepository &turmas, AlunoRepository &alunos,
     m_notaCorte->setToolTip(QStringLiteral("Médias abaixo deste valor aparecem em vermelho"));
     m_modelo->setNotaCorte(m_notaCorte->value());
 
-    m_btnImportar = new QPushButton(QStringLiteral("⬆ Importar Excel"));
-    m_btnExportar = new QPushButton(QStringLiteral("⬇ Exportar Excel"));
+    m_btnImportar = new QPushButton(QStringLiteral("Importar Excel"));
+    m_btnExportar = new QPushButton(QStringLiteral("Exportar Excel"));
+    ThemeManager::iconeNoBotao(m_btnImportar, QStringLiteral("subir"));
+    ThemeManager::iconeNoBotao(m_btnExportar, QStringLiteral("baixar"));
 
     barra1->addWidget(new QLabel(QStringLiteral("Turma:")));
     barra1->addWidget(m_comboTurma);
@@ -78,8 +80,6 @@ NotasPage::NotasPage(TurmaRepository &turmas, AlunoRepository &alunos,
     barra1->addWidget(new QLabel(QStringLiteral("Nota de corte:")));
     barra1->addWidget(m_notaCorte);
     barra1->addStretch(1);
-    barra1->addWidget(m_btnImportar);
-    barra1->addWidget(m_btnExportar);
     raiz->addLayout(barra1);
 
     // ---------------- Barra 2: avaliações ----------------
@@ -90,8 +90,10 @@ NotasPage::NotasPage(TurmaRepository &turmas, AlunoRepository &alunos,
     m_btnEditar = new QPushButton(QStringLiteral("Editar coluna"));
     m_btnExcluir = new QPushButton(QStringLiteral("Excluir coluna"));
     m_btnExcluir->setObjectName(QStringLiteral("danger"));
-    m_btnEsquerda = new QPushButton(QStringLiteral("◀"));
-    m_btnDireita = new QPushButton(QStringLiteral("▶"));
+    m_btnEsquerda = new QPushButton;
+    m_btnDireita = new QPushButton;
+    ThemeManager::iconeNoBotao(m_btnEsquerda, QStringLiteral("seta-esquerda"), Tokens::Id::Ink, 16);
+    ThemeManager::iconeNoBotao(m_btnDireita, QStringLiteral("seta-direita"), Tokens::Id::Ink, 16);
     m_btnEsquerda->setToolTip(QStringLiteral("Mover a coluna selecionada para a esquerda"));
     m_btnDireita->setToolTip(QStringLiteral("Mover a coluna selecionada para a direita"));
     barra2->addWidget(m_btnNovaAvaliacao);
@@ -100,6 +102,8 @@ NotasPage::NotasPage(TurmaRepository &turmas, AlunoRepository &alunos,
     barra2->addWidget(m_btnEsquerda);
     barra2->addWidget(m_btnDireita);
     barra2->addStretch(1);
+    barra2->addWidget(m_btnImportar);
+    barra2->addWidget(m_btnExportar);
     raiz->addLayout(barra2);
 
     // ---------------- Dica (estado vazio) ----------------
