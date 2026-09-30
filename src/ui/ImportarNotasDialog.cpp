@@ -1,4 +1,5 @@
 #include "ui/ImportarNotasDialog.h"
+#include "ui/ThemeManager.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -36,11 +37,13 @@ ImportarNotasDialog::ImportarNotasDialog(const QList<Avaliacao> &avaliacoesDaTur
                       .arg(amostra.join(QStringLiteral(", ")),
                            plano.alunosNaoEncontrados.size() > 8 ? QStringLiteral(" …") : QString());
     }
-    resumo += QStringLiteral("<br><span style='color:gray'>Alunos não são criados pela importação, e células vazias "
-                             "não apagam notas existentes.</span>");
+    resumo += QStringLiteral("<br><span style='color:%1'>Alunos não são criados pela importação, e células vazias "
+                             "não apagam notas existentes.</span>")
+                  .arg(ThemeManager::corHex(Tokens::Id::InkMuted));
     if (!planilha.avisos.isEmpty())
-        resumo += QStringLiteral("<br><span style='color:#D64545'>%1 valor(es) não numérico(s) serão ignorados.</span>")
-                      .arg(planilha.avisos.size());
+        resumo += QStringLiteral("<br><span style='color:%2'>%1 valor(es) não numérico(s) serão ignorados.</span>")
+                      .arg(planilha.avisos.size())
+                      .arg(ThemeManager::corHex(Tokens::Id::Danger));
 
     auto *lblResumo = new QLabel(resumo);
     lblResumo->setWordWrap(true);

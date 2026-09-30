@@ -27,9 +27,11 @@
 #include <QSettings>
 #include <QShortcut>
 #include <QStackedWidget>
+#include <QSize>
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <utility>
 
 namespace {
 constexpr int kIntervaloBackupHoras = BackupService::kIntervaloPadraoHoras;  // backup automático: a cada 24 h
@@ -38,7 +40,7 @@ constexpr int kIntervaloBackupAoFecharHoras = 12;                            // 
 
 MainWindow::MainWindow(Repositorios &repos, QWidget *parent) : QMainWindow(parent), m_repos(repos)
 {
-    setWindowTitle(QStringLiteral("Professor Organizado — %1").arg(identificacaoDoBuild()));
+    setWindowTitle(QStringLiteral("Caderno+ — %1").arg(identificacaoDoBuild()));
     resize(1280, 820);
     setMinimumSize(1000, 680);
 
@@ -63,29 +65,33 @@ MainWindow::MainWindow(Repositorios &repos, QWidget *parent) : QMainWindow(paren
     setCentralWidget(central);
 
     // --- Seções (na ordem da barra lateral) ---
-    adicionarSecao(QStringLiteral("🏠  Hoje"), new HojePage(repos.agenda, repos.tarefas));
+    adicionarSecao(QStringLiteral("hoje"), QStringLiteral("Hoje"), new HojePage(repos.agenda, repos.tarefas));
 
     m_paginaTurmas = new TurmasPage(repos);
-    adicionarSecao(QStringLiteral("👥  Turmas"), m_paginaTurmas);
+    adicionarSecao(QStringLiteral("turmas"), QStringLiteral("Turmas"), m_paginaTurmas);
 
-    adicionarSecao(QStringLiteral("📊  Notas"),
+    adicionarSecao(QStringLiteral("notas"), QStringLiteral("Notas"),
                    new NotasPage(repos.turmas, repos.alunos, repos.avaliacoes, repos.notas));
-    adicionarSecao(QStringLiteral("📋  Frequência"), new FrequenciaPage(repos));
-    adicionarSecao(QStringLiteral("🗓️  Horário"), new HorarioPage(repos.horarios, repos.turmas));
+    adicionarSecao(QStringLiteral("frequencia"), QStringLiteral("Frequência"), new FrequenciaPage(repos));
+    adicionarSecao(QStringLiteral("horario"), QStringLiteral("Horário"), new HorarioPage(repos.horarios, repos.turmas));
 
     m_paginaAulas = new AulasPage(repos);
-    adicionarSecao(QStringLiteral("📚  Aulas"), m_paginaAulas);
+    adicionarSecao(QStringLiteral("aulas"), QStringLiteral("Aulas"), m_paginaAulas);
 
     m_paginaAnotacoes = new AnotacoesPage(repos);
-    adicionarSecao(QStringLiteral("📝  Anotações"), m_paginaAnotacoes);
+    adicionarSecao(QStringLiteral("anotacoes"), QStringLiteral("Anotações"), m_paginaAnotacoes);
 
     m_paginaTarefas = new TarefasPage(repos);
-    adicionarSecao(QStringLiteral("✅  Tarefas"), m_paginaTarefas);
+    adicionarSecao(QStringLiteral("tarefas"), QStringLiteral("Tarefas"), m_paginaTarefas);
 
     m_paginaCalendario = new CalendarioPage(repos);
-    adicionarSecao(QStringLiteral("📅  Calendário"), m_paginaCalendario);
+    adicionarSecao(QStringLiteral("calendario"), QStringLiteral("Calendário"), m_paginaCalendario);
 
-    adicionarSecao(QStringLiteral("📈  Relatórios"), new RelatoriosPage(repos));
+    adicionarSecao(QStringLiteral("relatorios"), QStringLiteral("Relatórios"), new RelatoriosPage(repos));
+
+    // Ícones e cores da barra lateral acompanham o tema claro/escuro.
+    atualizarAparencia();
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, &MainWindow::atualizarAparencia);
 
     // Navegação entre telas: aba "Anotações" da turma -> editor; prazo de tarefa no calendário -> tarefas.
     connect(m_paginaTurmas, &TurmasPage::abrirAnotacaoSolicitada, this, [this](int id) {
@@ -127,9 +133,11 @@ void MainWindow::construirBarraLateral(QWidget *barra)
     layout->setContentsMargins(0, 0, 0, 12);
     layout->setSpacing(0);
 
-    auto *titulo = new QLabel(QStringLiteral("🎓 Professor\nOrganizado"));
-    titulo->setObjectName(QStringLiteral("appTitle"));
-    layout->addWidget(titulo);
+    // Assinatura do design: nome em Figtree Bold, com o "+" em ocre (texto refeito quando o tema muda).
+    m_titulo = new QLabel;
+    m_titulo->setObjectName(QStringLiteral("appTitle"));
+    m_titulo->setTextFormat(Qt::RichText);
+    layout->addWidget(m_titulo);
 
     // Os botões de navegação ficam num layout próprio; adicionarSecao() os insere aqui.
     m_layoutNavegacao = new QVBoxLayout;
@@ -140,14 +148,16 @@ void MainWindow::construirBarraLateral(QWidget *barra)
     layout->addStretch(1);
 
     // Ações fixas no rodapé: busca, backup, tema.
-    auto *botaoBusca = new QPushButton(QStringLiteral("🔍  Buscar  (Ctrl+K)"));
+    auto *botaoBusca = new QPushButton(QStringLiteral("Buscar  (Ctrl+K)"));
     botaoBusca->setObjectName(QStringLiteral("footerButton"));
+    registrarIcone(botaoBusca, QStringLiteral("busca"));
     botaoBusca->setCursor(Qt::PointingHandCursor);
     connect(botaoBusca, &QPushButton::clicked, this, &MainWindow::abrirBusca);
     layout->addWidget(botaoBusca);
 
-    auto *botaoBackup = new QPushButton(QStringLiteral("💾  Backup"));
+    auto *botaoBackup = new QPushButton(QStringLiteral("Backup"));
     botaoBackup->setObjectName(QStringLiteral("footerButton"));
+    registrarIcone(botaoBackup, QStringLiteral("backup"));
     botaoBackup->setCursor(Qt::PointingHandCursor);
     connect(botaoBackup, &QPushButton::clicked, this, &MainWindow::abrirBackup);
     layout->addWidget(botaoBackup);
@@ -155,11 +165,7 @@ void MainWindow::construirBarraLateral(QWidget *barra)
     m_botaoTema = new QPushButton;
     m_botaoTema->setObjectName(QStringLiteral("themeButton"));
     m_botaoTema->setCursor(Qt::PointingHandCursor);
-    atualizarTextoBotaoTema();
-    connect(m_botaoTema, &QPushButton::clicked, this, [this] {
-        ThemeManager::alternar();
-        atualizarTextoBotaoTema();
-    });
+    connect(m_botaoTema, &QPushButton::clicked, this, [] { ThemeManager::alternar(); });
     layout->addWidget(m_botaoTema);
 
     m_grupoNavegacao = new QButtonGroup(this);
@@ -167,11 +173,12 @@ void MainWindow::construirBarraLateral(QWidget *barra)
     connect(m_grupoNavegacao, &QButtonGroup::idClicked, this, &MainWindow::irParaSecao);
 }
 
-void MainWindow::adicionarSecao(const QString &titulo, QWidget *pagina)
+void MainWindow::adicionarSecao(const QString &icone, const QString &titulo, QWidget *pagina)
 {
     const int indice = m_paginas->addWidget(pagina);
 
     auto *botao = new QPushButton(titulo);
+    registrarIcone(botao, icone);
     botao->setCheckable(true);
     botao->setCursor(Qt::PointingHandCursor);
     m_grupoNavegacao->addButton(botao, indice);  // o id do botão = índice da página
@@ -193,11 +200,25 @@ void MainWindow::irParaPagina(QWidget *pagina)
     irParaSecao(m_paginas->indexOf(pagina));
 }
 
-void MainWindow::atualizarTextoBotaoTema()
+void MainWindow::registrarIcone(QPushButton *botao, const QString &icone)
 {
-    m_botaoTema->setText(ThemeManager::atual() == ThemeManager::Tema::Claro
-                             ? QStringLiteral("🌙  Modo escuro")
-                             : QStringLiteral("☀️  Modo claro"));
+    botao->setIconSize(QSize(20, 20));
+    m_iconesDosBotoes.append({botao, icone});
+}
+
+// Refaz o que depende das cores do tema: ícones SVG, assinatura e botão de tema.
+// Roda na criação da janela e sempre que o tema muda.
+void MainWindow::atualizarAparencia()
+{
+    for (const auto &par : std::as_const(m_iconesDosBotoes))
+        par.first->setIcon(ThemeManager::icone(par.second));
+
+    m_titulo->setText(QStringLiteral("Caderno<span style=\"color:%1\">+</span>")
+                          .arg(ThemeManager::corHex(Tokens::Id::Accent)));
+
+    const bool claro = ThemeManager::atual() == ThemeManager::Tema::Claro;
+    m_botaoTema->setText(claro ? QStringLiteral("Modo escuro") : QStringLiteral("Modo claro"));
+    m_botaoTema->setIcon(ThemeManager::icone(claro ? QStringLiteral("lua") : QStringLiteral("sol")));
 }
 
 // ============================================================================

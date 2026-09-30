@@ -1,4 +1,4 @@
-# Compila o Professor Organizado no Windows (MSVC + Qt 6) e publica uma pasta pronta
+# Compila o Caderno+ no Windows (MSVC + Qt 6) e publica uma pasta pronta
 # para rodar. Como usar: veja a seção "Build na nuvem" do README.md.
 #
 # Roda sozinho a cada push e também manualmente (aba Actions > Build Windows > Run workflow).
@@ -67,6 +67,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist/ProfOrganizer | Out-Null
           Copy-Item build/Release/ProfOrganizer.exe dist/ProfOrganizer/
+          # A fonte Figtree está embutida no .exe; a licença dela (SIL OFL) acompanha o pacote.
+          Copy-Item resources/fonts/OFL.txt dist/ProfOrganizer/Figtree-OFL.txt
           windeployqt --release --no-translations --no-system-d3d-compiler dist/ProfOrganizer/ProfOrganizer.exe
           Get-ChildItem dist/ProfOrganizer -Recurse | Measure-Object Length -Sum |
             ForEach-Object { "{0} arquivos, {1:N1} MB" -f $_.Count, ($_.Sum / 1MB) }

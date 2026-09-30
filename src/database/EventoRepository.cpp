@@ -11,7 +11,7 @@ namespace {
 // caracteres (a data) importam para o calendário.
 const char *SELECT_BASE =
     "SELECT e.id, COALESCE(e.turma_id, 0), e.titulo, e.tipo, substr(e.data_inicio, 1, 10), "
-    "substr(e.data_fim, 1, 10), e.descricao, COALESCE(t.nome, ''), COALESCE(t.cor, '#4C8BF5') "
+    "substr(e.data_fim, 1, 10), e.descricao, COALESCE(t.nome, ''), COALESCE(t.cor, 'turma-6') "
     "FROM eventos e LEFT JOIN turmas t ON t.id = e.turma_id ";
 
 Evento lerEvento(const QSqlQuery &q)

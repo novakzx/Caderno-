@@ -1,4 +1,5 @@
 #include "ui/FrequenciaPage.h"
+#include "ui/ThemeManager.h"
 
 #include "core/FrequenciaUtil.h"
 #include "database/AlunoRepository.h"
@@ -28,16 +29,6 @@ const QLocale &ptBR()
 {
     static const QLocale pt(QLocale::Portuguese, QLocale::Brazil);
     return pt;
-}
-
-// Cor do texto de cada situação da chamada.
-QString corDaSituacao(const QString &s)
-{
-    if (s == QLatin1String("F")) return QStringLiteral("#D64545");
-    if (s == QLatin1String("J")) return QStringLiteral("#E08A1E");
-    if (s == QLatin1String("A")) return QStringLiteral("#B8860B");
-    if (s == QLatin1String("P")) return QStringLiteral("#2E9E5B");
-    return QString();
 }
 
 }  // namespace
@@ -97,7 +88,7 @@ FrequenciaPage::FrequenciaPage(Repositorios &repos, QWidget *parent)
     lc->addLayout(linhaData);
 
     m_aviso = new QLabel;
-    m_aviso->setStyleSheet(QStringLiteral("color: #E08A1E; font-weight: 600;"));
+    ThemeManager::definirEstado(m_aviso, ThemeManager::Estado::Aviso);
     m_aviso->setWordWrap(true);
     lc->addWidget(m_aviso);
 
@@ -147,10 +138,18 @@ FrequenciaPage::FrequenciaPage(Repositorios &repos, QWidget *parent)
     m_tabelaMes->verticalHeader()->setVisible(false);
     lm->addWidget(m_tabelaMes, 1);
 
-    m_legendaMes = new QLabel(QStringLiteral(
-        "• presente   A atraso   <span style='color:#D64545'>F falta</span>   "
-        "<span style='color:#E08A1E'>J justificada</span>   ·   Freq. = frequência geral da turma no ano "
-        "(vermelho: abaixo de %1%)").arg(FrequenciaUtil::kFrequenciaMinima, 0, 'f', 0));
+    m_legendaMes = new QLabel;
+    auto montarLegenda = [this] {
+        m_legendaMes->setText(QStringLiteral(
+            "• presente   A atraso   <span style='color:%2'>F falta</span>   "
+            "<span style='color:%3'>J justificada</span>   ·   Freq. = frequência geral da turma no ano "
+            "(vermelho: abaixo de %1%)")
+                                  .arg(FrequenciaUtil::kFrequenciaMinima, 0, 'f', 0)
+                                  .arg(ThemeManager::corHex(Tokens::Id::Danger),
+                                       ThemeManager::corHex(Tokens::Id::Warning)));
+    };
+    montarLegenda();
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, montarLegenda);
     m_legendaMes->setTextFormat(Qt::RichText);
     m_legendaMes->setObjectName(QStringLiteral("muted"));
     m_legendaMes->setWordWrap(true);
@@ -158,6 +157,13 @@ FrequenciaPage::FrequenciaPage(Repositorios &repos, QWidget *parent)
     m_abas->addTab(abaMes, QStringLiteral("Resumo do mês"));
 
     // ===================== Conexões =====================
+    // Cores da chamada e do resumo (itens e combos) acompanham o tema.
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        if (isVisible()) {
+            recarregarChamada();
+            recarregarResumo();
+        }
+    });
     connect(m_comboTurma, &QComboBox::currentIndexChanged, this, [this] {
         recarregarChamada();
         recarregarResumo();
@@ -262,8 +268,9 @@ void FrequenciaPage::recarregarChamada()
         m_tabelaChamada->setCellWidget(linha, 2, justificativa);
 
         auto pintar = [combo] {
-            const QString cor = corDaSituacao(combo->currentData().toString());
-            combo->setStyleSheet(cor.isEmpty() ? QString() : QStringLiteral("QComboBox { color: %1; font-weight: 600; }").arg(cor));
+            const QColor cor = ThemeManager::corDaSituacao(combo->currentData().toString());
+            combo->setStyleSheet(cor.isValid() ? QStringLiteral("QComboBox { color: %1; font-weight: 600; }").arg(cor.name())
+                                               : QString());
         };
         pintar();
 
@@ -352,7 +359,7 @@ void FrequenciaPage::recarregarResumo()
         const ResumoFrequencia resumo = geral.value(aluno.id);
         const auto pct = FrequenciaUtil::percentual(resumo.presencas, resumo.atrasos, resumo.faltas, resumo.justificadas);
         if (pct && *pct < FrequenciaUtil::kFrequenciaMinima)
-            nome->setForeground(QBrush(QColor(QStringLiteral("#D64545"))));
+            nome->setForeground(QBrush(ThemeManager::cor(Tokens::Id::Danger)));
         m_tabelaMes->setItem(linha, 0, nome);
 
         int faltasNoMes = 0;
@@ -368,12 +375,15 @@ void FrequenciaPage::recarregarResumo()
             }
             auto *item = new QTableWidgetItem(texto);
             item->setTextAlignment(Qt::AlignCenter);
-            const QString cor = corDaSituacao(QString(c));
-            if (!cor.isEmpty() && c != QLatin1Char('P'))
-                item->setForeground(QBrush(QColor(cor)));
-            // Fins de semana com fundo levemente diferente.
+            const QColor cor = ThemeManager::corDaSituacao(QString(c));
+            if (cor.isValid() && c != QLatin1Char('P'))
+                item->setForeground(QBrush(cor));
+            // Fins de semana com fundo levemente diferente; o atraso (A) ganha o ocre suave.
             if (QDate(ano, mes, d).dayOfWeek() >= 6)
-                item->setBackground(QBrush(QColor(128, 128, 128, 40)));
+                item->setBackground(QBrush(ThemeManager::cor(Tokens::Id::Surface300)));
+            const QColor fundo = ThemeManager::fundoDaSituacao(QString(c));
+            if (fundo.isValid())
+                item->setBackground(QBrush(fundo));
             m_tabelaMes->setItem(linha, d, item);
         }
 
@@ -384,7 +394,7 @@ void FrequenciaPage::recarregarResumo()
         auto *itemFreq = new QTableWidgetItem(pct ? QStringLiteral("%1%").arg(QString::number(*pct, 'f', 1).replace('.', ',')) : QStringLiteral("—"));
         itemFreq->setTextAlignment(Qt::AlignCenter);
         if (pct && *pct < FrequenciaUtil::kFrequenciaMinima)
-            itemFreq->setForeground(QBrush(QColor(QStringLiteral("#D64545"))));
+            itemFreq->setForeground(QBrush(ThemeManager::cor(Tokens::Id::Danger)));
         m_tabelaMes->setItem(linha, colFreq, itemFreq);
     }
 }

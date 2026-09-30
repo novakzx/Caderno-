@@ -1,6 +1,7 @@
 #include "services/AutoTeste.h"
 
 #include "core/BuildInfo.h"
+#include "core/Tokens.h"
 #include "database/AgendaRepository.h"
 #include "database/AlunoRepository.h"
 #include "database/AnexoRepository.h"
@@ -22,10 +23,12 @@
 #include "services/DesempenhoService.h"
 #include "services/RelatorioPdf.h"
 
+#include <QColor>
 #include <QFile>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSvgRenderer>
 #include <QTemporaryDir>
 #include <QUuid>
 
@@ -206,6 +209,8 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     const int turmaId = turmas.inserir(t);
     r.verificar(QStringLiteral("TurmaRepository::inserir"), turmaId > 0, turmas.ultimoErro());
     r.verificar(QStringLiteral("TurmaRepository::listar"), turmas.listar(false).size() == 1, turmas.ultimoErro());
+    r.verificar(QStringLiteral("cor padrão da turma nova = turma-6 (token do design)"),
+                turmas.listar(false).value(0).cor == QStringLiteral("turma-6"), turmas.listar(false).value(0).cor);
 
     Aluno a;
     a.turmaId = turmaId;
@@ -368,12 +373,96 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
                     notas.listarPorTurma(turmaId).isEmpty() && aulas.listar(turmaId).isEmpty() && anexos.listarPorTurma(turmaId).isEmpty());
 }
 
+// ---------------------------------------------------------------------------
+// Migração 5: turmas com o azul antigo (#4C8BF5) passam a "turma-6" (padrão do design);
+// cores escolhidas à mão continuam como estão.
+// ---------------------------------------------------------------------------
+void testeMigracaoDeCores(Relatorio &r, const QString &pasta)
+{
+    r.titulo(QStringLiteral("Migração 5 (cor da turma como token do design)"));
+    const QString conexao = QStringLiteral("autoteste_migracao5");
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), conexao);
+        db.setDatabaseName(pasta + QStringLiteral("/migracao5.db"));
+        QString erro;
+        bool ok = db.open() && Migrations::aplicar(db, &erro);
+        r.verificar(QStringLiteral("banco novo migra até a versão final"), ok, erro);
+
+        if (ok) {
+            // Simula um banco da versão 4, com turmas do padrão antigo e com cor própria.
+            ok = Migrations::executarComando(db, QStringLiteral("INSERT INTO turmas (nome, ano_letivo, cor) VALUES ('Padrao antigo', 2026, '#4c8bf5')"), &erro) &&
+                 Migrations::executarComando(db, QStringLiteral("INSERT INTO turmas (nome, ano_letivo, cor) VALUES ('Cor propria', 2026, '#112233')"), &erro) &&
+                 Migrations::executarComando(db, QStringLiteral("PRAGMA user_version = 4"), &erro);
+            r.verificar(QStringLiteral("preparar banco na versão 4"), ok, erro);
+        }
+        if (ok) {
+            ok = Migrations::aplicar(db, &erro);
+            r.verificar(QStringLiteral("migração 5 aplicada sobre o banco antigo"), ok && Migrations::versaoAtual(db) == 5, erro);
+
+            QSqlQuery q(db);
+            QString padraoAntigo, propria;
+            if (q.exec(QStringLiteral("SELECT nome, cor FROM turmas ORDER BY id"))) {
+                while (q.next())
+                    (q.value(0).toString().startsWith(QStringLiteral("Padrao")) ? padraoAntigo : propria) = q.value(1).toString();
+            }
+            q.finish();
+            r.verificar(QStringLiteral("#4C8BF5 (padrão antigo) virou turma-6"), padraoAntigo == QStringLiteral("turma-6"), padraoAntigo);
+            r.verificar(QStringLiteral("cor escolhida à mão não foi alterada"), propria == QStringLiteral("#112233"), propria);
+        }
+        db.close();
+    }
+    QSqlDatabase::removeDatabase(conexao);
+}
+
+// ---------------------------------------------------------------------------
+// Recursos do design embutidos no .exe: ícones SVG da interface e fontes Figtree.
+// (As fontes são só conferidas como arquivo; carregá-las exige a interface gráfica.)
+// ---------------------------------------------------------------------------
+void testeRecursosDoDesign(Relatorio &r)
+{
+    r.titulo(QStringLiteral("Recursos do design (ícones SVG, fontes, tokens)"));
+
+    static const char *icones[] = {"hoje", "turmas", "notas", "frequencia", "horario", "aulas", "anotacoes",
+                                   "tarefas", "calendario", "relatorios", "busca", "backup", "lua", "sol", "check"};
+    int validos = 0;
+    QStringList invalidos;
+    for (const char *nome : icones) {
+        QFile arquivo(QStringLiteral(":/icons/%1.svg").arg(QLatin1String(nome)));
+        const bool existe = arquivo.open(QIODevice::ReadOnly);
+        const QByteArray svg = existe ? arquivo.readAll() : QByteArray();
+        QSvgRenderer renderizador(svg);
+        if (existe && renderizador.isValid() && svg.contains("currentColor"))
+            ++validos;
+        else
+            invalidos << QLatin1String(nome);
+    }
+    r.verificar(QStringLiteral("ícones SVG embutidos e válidos (%1 de %2)").arg(validos).arg(int(sizeof(icones) / sizeof(icones[0]))),
+                invalidos.isEmpty(), invalidos.join(QStringLiteral(", ")));
+
+    for (const char *fonte : {"Figtree-Regular.ttf", "Figtree-SemiBold.ttf", "Figtree-Bold.ttf"}) {
+        QFile arquivo(QStringLiteral(":/fonts/%1").arg(QLatin1String(fonte)));
+        const bool ok = arquivo.open(QIODevice::ReadOnly) && arquivo.size() > 20000 && arquivo.read(4) == QByteArray("\x00\x01\x00\x00", 4);
+        r.verificar(QStringLiteral("fonte embutida: %1").arg(QLatin1String(fonte)), ok);
+    }
+
+    // Tokens: nomes na ordem do enum, turma-6 = primary, cores no formato #rrggbb.
+    bool formatoOk = true;
+    for (std::size_t i = 0; i < Tokens::kTotal; ++i) {
+        const auto id = static_cast<Tokens::Id>(i);
+        for (const bool escuro : {false, true})
+            formatoOk = formatoOk && QColor(QLatin1String(Tokens::hex(id, escuro))).isValid();
+    }
+    r.verificar(QStringLiteral("%1 tokens de cor válidos nos dois temas").arg(int(Tokens::kTotal)), formatoOk);
+    r.verificar(QStringLiteral("cor padrão de turma nova (turma-6) é o primary"),
+                QLatin1String(Tokens::hex(Tokens::Id::Turma6, false)) == QLatin1String(Tokens::hex(Tokens::Id::Primary, false)));
+}
+
 }  // namespace
 
 int executar(const QString &arquivoSaida)
 {
     Relatorio r(arquivoSaida);
-    r.linha(QStringLiteral("Autoteste do Professor Organizado"));
+    r.linha(QStringLiteral("Autoteste do Caderno+"));
     r.linha(QStringLiteral("Versão: %1").arg(identificacaoDoBuild()));
     r.linha(QStringLiteral("Qt: %1 (compilado com %2)").arg(QString::fromLatin1(qVersion()), QStringLiteral(QT_VERSION_STR)));
 
@@ -401,6 +490,9 @@ int executar(const QString &arquivoSaida)
             q.finish();
             testeDeFumaca(r, pasta.path());
         }
+
+        testeMigracaoDeCores(r, pasta.path());
+        testeRecursosDoDesign(r);
 
         // 2) As variantes só interessam como diagnóstico; rodam sempre, mas são
         //    obrigatórias apenas quando a abertura principal falhou.

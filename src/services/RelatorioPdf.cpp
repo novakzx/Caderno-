@@ -1,6 +1,7 @@
 #include "services/RelatorioPdf.h"
 
 #include "core/FrequenciaUtil.h"
+#include "core/Tokens.h"
 
 #include <QDate>
 #include <QFile>
@@ -14,14 +15,24 @@ namespace RelatorioPdf {
 
 namespace {
 
-const char *kEstilo =
-    "<style>"
-    "body { font-family: 'Segoe UI', 'Helvetica', sans-serif; font-size: 10pt; color: #1F2937; }"
-    "h1 { font-size: 18pt; margin-bottom: 0; }"
-    "h2 { font-size: 12pt; margin-top: 16px; }"
-    "p.sub { color: #6B7280; margin-top: 2px; }"
-    "th { background-color: #DDE6FA; }"
-    "</style>";
+// O relatório vai para o papel (ou PDF), que é sempre claro: usa os tokens do tema claro.
+QString corPapel(Tokens::Id id)
+{
+    return QString::fromLatin1(Tokens::hex(id, false));
+}
+
+QString estilo()
+{
+    return QStringLiteral(
+               "<style>"
+               "body { font-family: 'Figtree', 'Segoe UI', 'Helvetica', sans-serif; font-size: 10pt; color: %1; }"
+               "h1 { font-size: 18pt; margin-bottom: 0; }"
+               "h2 { font-size: 12pt; margin-top: 16px; }"
+               "p.sub { color: %2; margin-top: 2px; }"
+               "th { background-color: %3; }"
+               "</style>")
+        .arg(corPapel(Tokens::Id::Ink), corPapel(Tokens::Id::InkMuted), corPapel(Tokens::Id::PrimarySoft));
+}
 
 QString esc(const QString &s) { return s.toHtmlEscaped(); }
 
@@ -56,7 +67,7 @@ QString mediaHtml(const std::optional<double> &m, double corte)
     if (!m)
         return QStringLiteral("—");
     const QString texto = numero(*m);
-    return *m < corte ? QStringLiteral("<font color='#C0392B'><b>%1</b></font>").arg(texto)
+    return *m < corte ? QStringLiteral("<font color='%2'><b>%1</b></font>").arg(texto, corPapel(Tokens::Id::Danger))
                       : QStringLiteral("<b>%1</b>").arg(texto);
 }
 
@@ -65,7 +76,7 @@ QString frequenciaHtml(const std::optional<double> &pct)
     if (!pct)
         return QStringLiteral("—");
     const QString texto = numero(*pct, 1) + QLatin1Char('%');
-    return *pct < FrequenciaUtil::kFrequenciaMinima ? QStringLiteral("<font color='#C0392B'><b>%1</b></font>").arg(texto)
+    return *pct < FrequenciaUtil::kFrequenciaMinima ? QStringLiteral("<font color='%2'><b>%1</b></font>").arg(texto, corPapel(Tokens::Id::Danger))
                                                     : texto;
 }
 
@@ -88,7 +99,7 @@ QString situacaoPorExtenso(QChar s)
 
 QString htmlBoletim(const Boletim &b, double notaCorte)
 {
-    QString h = QStringLiteral("<html><head>%1</head><body>").arg(QLatin1String(kEstilo));
+    QString h = QStringLiteral("<html><head>%1</head><body>").arg(estilo());
     h += cabecalho(QStringLiteral("Boletim — %1").arg(b.turma.nome),
                    QStringLiteral("%1 · %2 · %3")
                        .arg(b.turma.disciplina.isEmpty() ? QStringLiteral("sem disciplina") : b.turma.disciplina,
@@ -110,7 +121,7 @@ QString htmlBoletim(const Boletim &b, double notaCorte)
         h += QStringLiteral("</tr>");
     }
     // Linha de médias da turma
-    h += QStringLiteral("<tr bgcolor='#F4F6FA'>") + celula(QStringLiteral("<b>Média da turma</b>"));
+    h += QStringLiteral("<tr bgcolor='%1'>").arg(corPapel(Tokens::Id::Surface100)) + celula(QStringLiteral("<b>Média da turma</b>"));
     for (const auto &m : b.mediaPorAvaliacao)
         h += celula(m ? numero(*m, 1) : QStringLiteral("—"), QStringLiteral("align='center'"));
     h += celula(b.mediaTurma ? QStringLiteral("<b>%1</b>").arg(numero(*b.mediaTurma)) : QStringLiteral("—"),
@@ -127,7 +138,7 @@ QString htmlBoletim(const Boletim &b, double notaCorte)
 
 QString htmlFrequencia(const Boletim &b)
 {
-    QString h = QStringLiteral("<html><head>%1</head><body>").arg(QLatin1String(kEstilo));
+    QString h = QStringLiteral("<html><head>%1</head><body>").arg(estilo());
     h += cabecalho(QStringLiteral("Frequência — %1").arg(b.turma.nome),
                    QStringLiteral("%1 · %2")
                        .arg(b.turma.disciplina.isEmpty() ? QStringLiteral("sem disciplina") : b.turma.disciplina,
@@ -158,7 +169,7 @@ QString htmlFrequencia(const Boletim &b)
 
 QString htmlFicha(const FichaAluno &f, double notaCorte)
 {
-    QString h = QStringLiteral("<html><head>%1</head><body>").arg(QLatin1String(kEstilo));
+    QString h = QStringLiteral("<html><head>%1</head><body>").arg(estilo());
     h += cabecalho(QStringLiteral("Ficha do aluno — %1").arg(f.aluno.nome),
                    QStringLiteral("%1 · %2%3")
                        .arg(f.turma.nome, QString::number(f.turma.anoLetivo),
@@ -217,7 +228,7 @@ bool salvarPdf(const QString &html, const QString &caminho, const QString &titul
     writer.setPageOrientation(paisagem ? QPageLayout::Landscape : QPageLayout::Portrait);
     writer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
     writer.setTitle(titulo);
-    writer.setCreator(QStringLiteral("Professor Organizado"));
+    writer.setCreator(QStringLiteral("Caderno+"));
 
     QTextDocument doc;
     doc.setHtml(html);

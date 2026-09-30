@@ -15,11 +15,12 @@ struct Cores {
     QColor fundo, grade, texto, textoSuave, destaque, alerta;
 };
 
+// Cores dos tokens do tema atual (o gráfico pinta tudo sozinho e repinta quando o tema muda).
 Cores coresDoTema()
 {
-    if (ThemeManager::atual() == ThemeManager::Tema::Escuro)
-        return {QColor("#1B212D"), QColor("#2E3748"), QColor("#E5E9F2"), QColor("#9AA4B8"), QColor("#5B8CFF"), QColor("#FF6B6B")};
-    return {QColor("#FFFFFF"), QColor("#E3E7EF"), QColor("#1F2937"), QColor("#6B7280"), QColor("#3B6FE0"), QColor("#D64545")};
+    using T = Tokens::Id;
+    return {ThemeManager::cor(T::Surface200), ThemeManager::cor(T::Line),    ThemeManager::cor(T::Ink),
+            ThemeManager::cor(T::InkMuted),   ThemeManager::cor(T::Primary), ThemeManager::cor(T::Danger)};
 }
 
 }  // namespace

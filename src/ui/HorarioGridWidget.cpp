@@ -32,13 +32,14 @@ struct Cores {
     QColor fundo, linha, linhaSuave, texto, textoSuave, cabecalho, hoje, agora;
 };
 
+// Cores dos tokens do tema atual (a grade pinta tudo sozinha e repinta quando o tema muda).
 Cores coresDoTema()
 {
-    if (ThemeManager::atual() == ThemeManager::Tema::Escuro)
-        return {QColor("#1B212D"), QColor("#2E3748"), QColor("#252D3C"), QColor("#E5E9F2"),
-                QColor("#9AA4B8"), QColor("#232B3A"), QColor(91, 140, 255, 28), QColor("#FF5C5C")};
-    return {QColor("#FFFFFF"), QColor("#DDE2EC"), QColor("#EEF1F7"), QColor("#1F2937"),
-            QColor("#6B7280"), QColor("#EEF1F7"), QColor(59, 111, 224, 22), QColor("#E03A3A")};
+    using T = Tokens::Id;
+    return {ThemeManager::cor(T::Surface200), ThemeManager::cor(T::Line),
+            ThemeManager::cor(T::Surface300), ThemeManager::cor(T::Ink),
+            ThemeManager::cor(T::InkMuted),   ThemeManager::cor(T::Surface300),
+            ThemeManager::comAlfa(T::Primary, 24), ThemeManager::cor(T::Danger)};
 }
 
 }  // namespace
@@ -156,7 +157,7 @@ void HorarioGridWidget::paintEvent(QPaintEvent *)
     p.setFont(negrito);
     for (int d = 1; d <= m_dias; ++d) {
         const QRect r(kLarguraHoras + (d - 1) * colW, 0, colW, kAlturaCabecalho);
-        p.setPen(d == hoje ? palette().color(QPalette::Highlight) : c.texto);
+        p.setPen(d == hoje ? ThemeManager::cor(Tokens::Id::Primary) : c.texto);
         const QString nome = QFontMetrics(negrito).elidedText(QString::fromUtf8(kNomesDias[d - 1]),
                                                               Qt::ElideRight, colW - 8);
         p.drawText(r, Qt::AlignCenter, nome);
@@ -195,9 +196,7 @@ void HorarioGridWidget::paintEvent(QPaintEvent *)
         const QRect r = retangulo(a.diaSemana, emMinutos(a.inicio), emMinutos(a.fim));
         const bool sendoArrastado = m_arrastando && a.id == m_origem.id;
 
-        QColor cor(a.turmaCor);
-        if (!cor.isValid())
-            cor = QColor("#4C8BF5");
+        QColor cor = ThemeManager::corDaTurma(a.turmaCor);
         if (sendoArrastado)
             cor.setAlpha(70);  // o original fica "apagado" enquanto o fantasma se move
 
@@ -205,7 +204,8 @@ void HorarioGridWidget::paintEvent(QPaintEvent *)
         p.setBrush(cor);
         p.drawRoundedRect(r, 6, 6);
 
-        const QColor textoCor = (cor.lightness() > 170 && !sendoArrastado) ? QColor("#1F2937") : QColor("#FFFFFF");
+        // on-turma garante o contraste sobre a cor da turma; apagado (arrastando), vale o texto normal.
+        const QColor textoCor = sendoArrastado ? c.texto : ThemeManager::textoSobreTurma(a.turmaCor);
         p.save();
         p.setClipRect(r.adjusted(5, 3, -5, -3));
         p.setPen(textoCor);
@@ -235,12 +235,15 @@ void HorarioGridWidget::paintEvent(QPaintEvent *)
     // Fantasma do arraste (vermelho quando bate em outra aula)
     if (m_arrastando && m_fantasmaDia > 0) {
         const QRect r = retangulo(m_fantasmaDia, m_fantasmaIni, m_fantasmaFim);
-        QColor cor = m_fantasmaConflito ? QColor("#E03A3A") : QColor(m_origem.turmaCor);
+        QColor cor = m_fantasmaConflito ? ThemeManager::cor(Tokens::Id::Danger)
+                                        : ThemeManager::corDaTurma(m_origem.turmaCor);
+        const QColor textoFantasma = m_fantasmaConflito ? ThemeManager::cor(Tokens::Id::OnTurma)
+                                                        : ThemeManager::textoSobreTurma(m_origem.turmaCor);
         cor.setAlpha(190);
-        p.setPen(QPen(Qt::white, 1));
+        p.setPen(QPen(textoFantasma, 1));
         p.setBrush(cor);
         p.drawRoundedRect(r, 6, 6);
-        p.setPen(Qt::white);
+        p.setPen(textoFantasma);
         p.setFont(negrito);
         p.drawText(r.adjusted(7, 4, -5, -3), Qt::AlignLeft | Qt::AlignTop,
                    QStringLiteral("%1\n%2–%3").arg(m_origem.turmaNome,

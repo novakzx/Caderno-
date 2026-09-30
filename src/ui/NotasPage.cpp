@@ -1,4 +1,5 @@
 #include "ui/NotasPage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/AlunoRepository.h"
 #include "database/AvaliacaoRepository.h"
@@ -290,8 +291,7 @@ void NotasPage::atualizarEstado()
 
 void NotasPage::mostrarMensagem(const QString &texto, bool erro)
 {
-    m_mensagem->setStyleSheet(erro ? QStringLiteral("color: #D64545; font-weight: 600;")
-                                   : QStringLiteral("color: #2E9E5B; font-weight: 600;"));
+    ThemeManager::definirEstado(m_mensagem, erro ? ThemeManager::Estado::Erro : ThemeManager::Estado::Sucesso);
     m_mensagem->setText(texto);
     m_timerMensagem->start(6000);
 }

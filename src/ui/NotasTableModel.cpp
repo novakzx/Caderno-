@@ -1,4 +1,5 @@
 #include "ui/NotasTableModel.h"
+#include "ui/ThemeManager.h"
 
 #include "core/MediaCalculator.h"
 #include "database/AlunoRepository.h"
@@ -179,7 +180,7 @@ QVariant NotasTableModel::data(const QModelIndex &index, int role) const
         case Qt::ForegroundRole:
             // Média abaixo da nota de corte aparece em vermelho.
             if (m && *m < m_notaCorte)
-                return QBrush(QColor(QStringLiteral("#D64545")));
+                return QBrush(ThemeManager::cor(Tokens::Id::Danger));
             return {};
         case Qt::ToolTipRole:
             return m ? QStringLiteral("Média ponderada das notas lançadas")

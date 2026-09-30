@@ -1,4 +1,5 @@
 #include "ui/HorarioDialog.h"
+#include "ui/ThemeManager.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -21,7 +22,7 @@ HorarioDialog::HorarioDialog(const QList<Turma> &turmas, const Horario &inicial,
     m_turma = new QComboBox;
     for (const Turma &t : m_turmas) {
         QPixmap pm(14, 14);
-        pm.fill(QColor(t.cor));
+        pm.fill(ThemeManager::corDaTurma(t.cor));
         QString texto = t.nome;
         if (!t.disciplina.isEmpty())
             texto += QStringLiteral(" — ") + t.disciplina;

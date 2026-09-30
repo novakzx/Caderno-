@@ -22,6 +22,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QIcon>
 #include <QMessageBox>
 
 int main(int argc, char *argv[])
@@ -39,7 +40,12 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("ProfOrganizer"));
     QApplication::setOrganizationName(QStringLiteral("ProfOrganizer"));
     QApplication::setApplicationVersion(QStringLiteral("1.0.0"));
+    // Nome exibido e ícone (o nome interno "ProfOrganizer" acima não muda: é a pasta dos dados).
+    QApplication::setApplicationDisplayName(QStringLiteral("Caderno+"));
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/icon-256.png")));
 
+    // Fonte Figtree (embutida) e tema salvo; a fonte precisa estar registrada antes do tema.
+    ThemeManager::carregarFontes();
     ThemeManager::carregarSalvo();
 
     // Restauração de backup pendente (pedida na sessão anterior): precisa acontecer

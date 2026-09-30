@@ -17,8 +17,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# Widgets: interface · Sql: SQLite · (PDF usa QPdfWriter, que faz parte do Qt Gui)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+# Widgets: interface · Sql: SQLite · Svg: ícones da barra lateral · (PDF usa QPdfWriter, do Qt Gui)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Svg)
 
 # --- QXlsx (importar/exportar .xlsx) -------------------------------------------
 # A biblioteca fica em third_party/QXlsx (veja o README, passo "Baixar o QXlsx").
@@ -42,10 +42,17 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
 
-qt_add_executable(ProfOrganizer WIN32 MACOSX_BUNDLE ${SOURCES})
+# Ícone e imagens do app (resources/): .qrc embute os PNGs, os ícones SVG e as fontes Figtree;
+# .rc dá o ícone do .exe no Windows.
+set(RECURSOS ${CMAKE_CURRENT_SOURCE_DIR}/resources/resources.qrc)
+if(WIN32)
+    list(APPEND RECURSOS ${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc)
+endif()
+
+qt_add_executable(ProfOrganizer WIN32 MACOSX_BUNDLE ${SOURCES} ${RECURSOS})
 
 target_include_directories(ProfOrganizer PRIVATE src)
-target_link_libraries(ProfOrganizer PRIVATE Qt6::Widgets Qt6::Sql QXlsx::QXlsx)
+target_link_libraries(ProfOrganizer PRIVATE Qt6::Widgets Qt6::Sql Qt6::Svg QXlsx::QXlsx)
 
 # Identificação do build (início do hash do commit), passada pelo workflow:
 #   cmake ... -DPROFORG_BUILD_ID=6d9e0f0
@@ -57,7 +64,7 @@ endif()
 
 # --- Testes (sem Qt): ctest --test-dir build ------------------------------------
 enable_testing()
-foreach(nome media horario frequencia)
+foreach(nome media horario frequencia contraste)
     add_executable(test_${nome} tests/test_${nome}.cpp)
     target_include_directories(test_${nome} PRIVATE src)
     add_test(NAME ${nome} COMMAND test_${nome})

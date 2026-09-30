@@ -1,4 +1,5 @@
 #include "ui/HojePage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/AgendaRepository.h"
 #include "database/TarefaRepository.h"
@@ -131,6 +132,11 @@ HojePage::HojePage(AgendaRepository &agenda, TarefaRepository &tarefas, QWidget 
     raiz->addLayout(grade, 1);
 
     connect(m_novaTarefa, &QLineEdit::returnPressed, this, &HojePage::criarTarefaRapida);
+    // Faixas das turmas, provas e prazos atrasados acompanham o tema.
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        if (isVisible())
+            atualizar();
+    });
 
     // Atualiza sozinho (a aula "em andamento" muda com o relógio).
     m_timer = new QTimer(this);
@@ -194,7 +200,7 @@ void HojePage::atualizarAulas(const QDate &hoje, const QTime &agora, int *total)
         // Faixa colorida da turma
         auto *faixa = new QFrame;
         faixa->setFixedWidth(6);
-        faixa->setStyleSheet(QStringLiteral("background: %1; border-radius: 3px;").arg(h.turmaCor));
+        faixa->setStyleSheet(QStringLiteral("background: %1; border-radius: 3px;").arg(ThemeManager::corDaTurmaHex(h.turmaCor)));
         hl->addWidget(faixa);
 
         auto *textos = new QVBoxLayout;
@@ -254,7 +260,7 @@ void HojePage::atualizarTarefas(const QDate &hoje, int *total)
             const int dias = hoje.daysTo(t.dataEntrega);
             detalhes << textoRelativo(dias);
             if (dias < 0)
-                corDetalhe = QStringLiteral("#D64545");
+                corDetalhe = ThemeManager::corHex(Tokens::Id::Danger);
         }
         if (!t.turmaNome.isEmpty())
             detalhes << t.turmaNome;
@@ -295,10 +301,11 @@ void HojePage::atualizarProvas(const QDate &hoje, int *total)
         const int dias = hoje.daysTo(p.data);
         auto *linha = new QLabel(
             QStringLiteral("<span style='color:%1'>■</span> <b>%2</b> · %3<br>"
-                           "<span style='color:gray'>%4 (%5)</span>")
-                .arg(p.turmaCor, p.titulo.toHtmlEscaped(),
+                           "<span style='color:%6'>%4 (%5)</span>")
+                .arg(ThemeManager::corDaTurmaHex(p.turmaCor), p.titulo.toHtmlEscaped(),
                      p.turmaNome.isEmpty() ? QStringLiteral("geral") : p.turmaNome.toHtmlEscaped(),
-                     ptBR().toString(p.data, QStringLiteral("ddd, dd/MM")), textoRelativo(dias)));
+                     ptBR().toString(p.data, QStringLiteral("ddd, dd/MM")), textoRelativo(dias),
+                     ThemeManager::corHex(Tokens::Id::InkMuted)));
         linha->setTextFormat(Qt::RichText);
         linha->setWordWrap(true);
         m_listaProvas->addWidget(linha);

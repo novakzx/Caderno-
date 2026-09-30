@@ -114,7 +114,7 @@ bool validarArquivo(const QString &arquivo, QString *erro)
                 problema = QStringLiteral("O arquivo está corrompido (%1).").arg(q.value(0).toString());
             } else if (!q.exec(QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'turmas'")) ||
                        !q.next() || q.value(0).toInt() == 0) {
-                problema = QStringLiteral("Este arquivo não parece ser um backup do Professor Organizado.");
+                problema = QStringLiteral("Este arquivo não parece ser um backup do Caderno+.");
             } else if (q.exec(QStringLiteral("PRAGMA user_version")) && q.next() &&
                        q.value(0).toInt() > Migrations::todas().last().versao) {
                 problema = QStringLiteral("O backup foi feito por uma versão mais nova do programa (esquema %1). "

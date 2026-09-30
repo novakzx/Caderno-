@@ -15,5 +15,5 @@ struct Horario {
     // Campos da turma, preenchidos pelo repositório para exibição (não gravados aqui).
     QString turmaNome;
     QString turmaDisciplina;
-    QString turmaCor = QStringLiteral("#4C8BF5");
+    QString turmaCor = QStringLiteral("turma-6");  // token da turma (ThemeManager::corDaTurma)
 };

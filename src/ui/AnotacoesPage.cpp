@@ -1,4 +1,5 @@
 #include "ui/AnotacoesPage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/AlunoRepository.h"
 #include "database/AnotacaoRepository.h"
@@ -534,8 +535,8 @@ void AnotacoesPage::alternarSublinhado(bool ligado)
 void AnotacoesPage::alternarMarcaTexto(bool ligado)
 {
     QTextCharFormat f;
-    // Amarelo semitransparente: legível tanto no tema claro quanto no escuro.
-    f.setBackground(ligado ? QBrush(QColor(255, 214, 0, 95)) : QBrush(Qt::NoBrush));
+    // Ocre (accent) semitransparente: legível tanto no tema claro quanto no escuro.
+    f.setBackground(ligado ? QBrush(ThemeManager::comAlfa(Tokens::Id::Accent, 95)) : QBrush(Qt::NoBrush));
     m_texto->mergeCurrentCharFormat(f);
     m_texto->setFocus();
 }

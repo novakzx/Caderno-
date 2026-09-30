@@ -1,4 +1,5 @@
 #include "ui/TarefasPage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/Repositorios.h"
 #include "database/TarefaRepository.h"
@@ -83,6 +84,11 @@ TarefasPage::TarefasPage(Repositorios &repos, QWidget *parent)
     m_resumo->setObjectName(QStringLiteral("muted"));
     raiz->addWidget(m_resumo);
 
+    // As cores dos itens (atraso, prioridade, concluída) acompanham o tema.
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        if (isVisible())
+            recarregar(tarefaSelecionadaId());
+    });
     connect(btnNova, &QPushButton::clicked, this, &TarefasPage::nova);
     connect(m_btnEditar, &QPushButton::clicked, this, &TarefasPage::editar);
     connect(m_btnExcluir, &QPushButton::clicked, this, &TarefasPage::excluir);
@@ -150,14 +156,14 @@ void TarefasPage::recarregar(int selecionarId)
             QFont f = nome->font();
             f.setStrikeOut(true);
             nome->setFont(f);
-            nome->setForeground(QBrush(QColor(128, 128, 128)));
+            nome->setForeground(QBrush(ThemeManager::cor(Tokens::Id::InkMuted)));
         }
         m_tabela->setItem(i, 1, nome);
         m_tabela->setItem(i, 2, new QTableWidgetItem(t.turmaNome));
 
         auto *prazo = new QTableWidgetItem(t.dataEntrega.isValid() ? t.dataEntrega.toString(QStringLiteral("dd/MM/yyyy")) : QStringLiteral("—"));
         if (!t.concluida && t.dataEntrega.isValid() && t.dataEntrega < hoje) {
-            prazo->setForeground(QBrush(QColor(QStringLiteral("#D64545"))));
+            prazo->setForeground(QBrush(ThemeManager::cor(Tokens::Id::Danger)));
             prazo->setText(prazo->text() + QStringLiteral(" (atrasada)"));
             ++atrasadas;
         }
@@ -165,7 +171,7 @@ void TarefasPage::recarregar(int selecionarId)
 
         auto *prioridade = new QTableWidgetItem(nomeDaPrioridade(t.prioridade));
         if (t.prioridade >= 2)
-            prioridade->setForeground(QBrush(QColor(QStringLiteral("#D64545"))));
+            prioridade->setForeground(QBrush(ThemeManager::cor(Tokens::Id::Danger)));
         m_tabela->setItem(i, 4, prioridade);
 
         if (t.id == selecionarId)

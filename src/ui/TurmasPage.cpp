@@ -1,4 +1,5 @@
 #include "ui/TurmasPage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/AlunoRepository.h"
 #include "database/AnotacaoRepository.h"
@@ -31,7 +32,7 @@ constexpr int kRoleId = Qt::UserRole;
 QIcon iconeDaCor(const QString &cor)
 {
     QPixmap pm(14, 14);
-    pm.fill(QColor(cor));
+    pm.fill(ThemeManager::corDaTurma(cor));
     return QIcon(pm);
 }
 
@@ -183,6 +184,11 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     raiz->addWidget(divisor, 1);
 
     // ------------------------------ Conexões ------------------------------
+    // Os quadradinhos de cor das turmas acompanham o tema.
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        if (isVisible())
+            recarregarTurmas(turmaSelecionadaId());
+    });
     connect(m_btnNovaTurma, &QPushButton::clicked, this, &TurmasPage::novaTurma);
     connect(m_btnEditarTurma, &QPushButton::clicked, this, &TurmasPage::editarTurma);
     connect(m_btnExcluirTurma, &QPushButton::clicked, this, &TurmasPage::excluirTurma);

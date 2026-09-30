@@ -73,7 +73,7 @@ QList<AgendaRepository::ProvaProxima> AgendaRepository::provasProximas(const QDa
     QSqlQuery q;
     // substr(...,1,10) pega só a parte da data, caso o evento guarde data e hora.
     q.prepare(QStringLiteral(
-        "SELECT substr(e.data_inicio, 1, 10) AS dia, e.titulo, COALESCE(t.nome, ''), COALESCE(t.cor, '#4C8BF5') "
+        "SELECT substr(e.data_inicio, 1, 10) AS dia, e.titulo, COALESCE(t.nome, ''), COALESCE(t.cor, 'turma-6') "
         "FROM eventos e LEFT JOIN turmas t ON t.id = e.turma_id "
         "WHERE e.tipo = 'prova' AND substr(e.data_inicio, 1, 10) BETWEEN :de AND :ate "
         "UNION ALL "

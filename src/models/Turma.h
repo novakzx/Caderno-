@@ -11,7 +11,7 @@ struct Turma {
     int anoLetivo = 0;
     QString periodo;          // ex.: "Manhã", "1º semestre"
     QString sala;
-    QString cor = QStringLiteral("#4C8BF5");  // usada no horário e nas listas
+    QString cor = QStringLiteral("turma-6");  // token "turma-1".."turma-6" (ou "#rrggbb" antigo); veja ThemeManager::corDaTurma
     bool arquivada = false;
 
     // Campo calculado pelo repositório (não existe na tabela): alunos ativos.

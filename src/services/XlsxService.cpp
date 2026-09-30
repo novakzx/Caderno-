@@ -1,6 +1,7 @@
 #include "services/XlsxService.h"
 
 #include "core/TextoUtil.h"
+#include "core/Tokens.h"
 #include "database/NotaRepository.h"
 
 #include <QColor>
@@ -81,7 +82,8 @@ bool exportar(const QString &caminho, const DadosExportacao &dados, QString *err
     QXlsx::Format fmtCabecalho;
     fmtCabecalho.setFontBold(true);
     fmtCabecalho.setFillPattern(QXlsx::Format::PatternSolid);
-    fmtCabecalho.setPatternBackgroundColor(QColor(QStringLiteral("#DDE6FA")));
+    // Planilha é um arquivo (sem tema): usa o primary-soft do tema claro.
+    fmtCabecalho.setPatternBackgroundColor(QColor(QLatin1String(Tokens::hex(Tokens::Id::PrimarySoft, false))));
     fmtCabecalho.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
 
     QXlsx::Format fmtRotulo;

@@ -2,12 +2,16 @@
 
 #include "database/BuscaRepository.h"
 
+#include <QList>
 #include <QMainWindow>
+#include <QPair>
+#include <QString>
 
 class AnotacoesPage;
 class AulasPage;
 class CalendarioPage;
 class QButtonGroup;
+class QLabel;
 class QPushButton;
 class QStackedWidget;
 class QTimer;
@@ -20,7 +24,7 @@ struct Repositorios;
 // área de conteúdo à direita (QStackedWidget com uma página por seção).
 //
 // Para adicionar uma nova seção, basta chamar adicionarSecao() no construtor
-// com o título do botão e a página.
+// com o nome do ícone (resources/icons/<nome>.svg), o título do botão e a página.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -31,8 +35,9 @@ protected:
 
 private:
     void construirBarraLateral(QWidget *barra);
-    void adicionarSecao(const QString &titulo, QWidget *pagina);
-    void atualizarTextoBotaoTema();
+    void adicionarSecao(const QString &icone, const QString &titulo, QWidget *pagina);
+    void registrarIcone(QPushButton *botao, const QString &icone);
+    void atualizarAparencia();
     void irParaSecao(int indice);
     void irParaPagina(QWidget *pagina);
 
@@ -47,6 +52,8 @@ private:
     QButtonGroup *m_grupoNavegacao = nullptr;
     QVBoxLayout *m_layoutNavegacao = nullptr;
     QPushButton *m_botaoTema = nullptr;
+    QLabel *m_titulo = nullptr;
+    QList<QPair<QPushButton *, QString>> m_iconesDosBotoes;  // botão -> nome do ícone SVG
     QTimer *m_timerBackup = nullptr;
 
     // Páginas que recebem navegação vinda da busca global e de outras telas.

@@ -4,6 +4,7 @@
 
 #include <QDialog>
 
+class QButtonGroup;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
@@ -24,8 +25,11 @@ protected:
     void accept() override;
 
 private:
-    void escolherCor();
-    void atualizarBotaoCor();
+    // Seletor de cor: as seis cores do design (turma-1..turma-6) como sugestões
+    // e "Outra cor…" para uma cor livre.
+    QWidget *criarSeletorDeCor();
+    void escolherCorLivre();
+    void atualizarSeletorDeCor();
 
     Turma m_turma;
     QLineEdit *m_nome = nullptr;
@@ -33,6 +37,7 @@ private:
     QSpinBox *m_ano = nullptr;
     QLineEdit *m_periodo = nullptr;
     QLineEdit *m_sala = nullptr;
-    QPushButton *m_botaoCor = nullptr;
+    QButtonGroup *m_grupoCor = nullptr;   // ids 1..6 = turma-N; 7 = cor livre
+    QPushButton *m_botaoCorLivre = nullptr;
     QCheckBox *m_arquivada = nullptr;
 };

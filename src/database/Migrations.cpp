@@ -229,6 +229,26 @@ static Migracao migracaoAnotacoesFrequencia()
     return m;
 }
 
+// ---------------------------------------------------------------------------
+// Migração 5 (design system do Caderno+): a cor da turma passa a ser guardada como
+// NOME de token ("turma-1" a "turma-6"), que acompanha o tema claro/escuro. O azul
+// antigo (#4C8BF5), que era o padrão de turma nova, vira "turma-6" (lousa).
+//
+// Cores escolhidas à mão ("#rrggbb") continuam valendo como estão.
+// O DEFAULT da coluna (migração 1) não pode ser alterado sem recriar a tabela, mas
+// não é mais usado: TurmaRepository sempre grava a cor, e o padrão está em Turma::cor.
+// ---------------------------------------------------------------------------
+static Migracao migracaoCoresDeTurma()
+{
+    Migracao m;
+    m.versao = 5;
+    m.descricao = QStringLiteral("Cor da turma como token do design system");
+    m.comandos = {
+        "UPDATE turmas SET cor = 'turma-6' WHERE upper(cor) = '#4C8BF5'",
+    };
+    return m;
+}
+
 const QList<Migracao> &todas()
 {
     // Para evoluir o esquema, acrescente novas migrações AQUI, no fim
@@ -238,6 +258,7 @@ const QList<Migracao> &todas()
         migracaoIndicesNotas(),
         migracaoIndicesHoje(),
         migracaoAnotacoesFrequencia(),
+        migracaoCoresDeTurma(),
     };
     return lista;
 }

@@ -1,4 +1,5 @@
 #include "ui/AnexosWidget.h"
+#include "ui/ThemeManager.h"
 
 #include "core/AnexoUtil.h"
 #include "database/AnexoRepository.h"
@@ -57,6 +58,8 @@ AnexosWidget::AnexosWidget(AnexoRepository &anexos, QWidget *parent) : QWidget(p
     botoes->addWidget(m_btnRemover);
     raiz->addLayout(botoes);
 
+    // As cores dos itens (arquivo não encontrado) acompanham o tema.
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] { recarregar(); });
     connect(m_btnAdicionar, &QPushButton::clicked, this, &AnexosWidget::adicionar);
     connect(m_btnAbrir, &QPushButton::clicked, this, &AnexosWidget::abrirSelecionado);
     connect(m_btnRemover, &QPushButton::clicked, this, &AnexosWidget::removerSelecionado);
@@ -91,7 +94,7 @@ void AnexosWidget::recarregar()
             item->setData(Qt::UserRole + 1, a.caminho);
             item->setToolTip(a.caminho);
             if (!existe)
-                item->setForeground(QBrush(QColor(QStringLiteral("#D64545"))));
+                item->setForeground(QBrush(ThemeManager::cor(Tokens::Id::Danger)));
             m_lista->addItem(item);
         }
     }

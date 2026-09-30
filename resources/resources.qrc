@@ -1,0 +1,26 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="icon-256.png">icons/icon-256.png</file>
+        <file alias="icon-512.png">icons/icon-512.png</file>
+        <file alias="hoje.svg">icons/hoje.svg</file>
+        <file alias="turmas.svg">icons/turmas.svg</file>
+        <file alias="notas.svg">icons/notas.svg</file>
+        <file alias="frequencia.svg">icons/frequencia.svg</file>
+        <file alias="horario.svg">icons/horario.svg</file>
+        <file alias="aulas.svg">icons/aulas.svg</file>
+        <file alias="anotacoes.svg">icons/anotacoes.svg</file>
+        <file alias="tarefas.svg">icons/tarefas.svg</file>
+        <file alias="calendario.svg">icons/calendario.svg</file>
+        <file alias="relatorios.svg">icons/relatorios.svg</file>
+        <file alias="busca.svg">icons/busca.svg</file>
+        <file alias="backup.svg">icons/backup.svg</file>
+        <file alias="lua.svg">icons/lua.svg</file>
+        <file alias="sol.svg">icons/sol.svg</file>
+        <file alias="check.svg">icons/check.svg</file>
+    </qresource>
+    <qresource prefix="/fonts">
+        <file alias="Figtree-Regular.ttf">fonts/Figtree-Regular.ttf</file>
+        <file alias="Figtree-SemiBold.ttf">fonts/Figtree-SemiBold.ttf</file>
+        <file alias="Figtree-Bold.ttf">fonts/Figtree-Bold.ttf</file>
+    </qresource>
+</RCC>

@@ -1,4 +1,4 @@
-# Professor Organizado
+# Caderno+
 
 App desktop (Qt 6 Widgets + SQLite + QXlsx) para professores organizarem a vida escolar.
 Tudo offline: os dados ficam num único arquivo SQLite no computador.
@@ -42,7 +42,7 @@ testes e gera uma pasta pronta para usar. Passo a passo:
    ```
    git init
    git add .
-   git commit -m "Professor Organizado"
+   git commit -m "Caderno+"
    git branch -M main
    git remote add origin https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git
    git push -u origin main

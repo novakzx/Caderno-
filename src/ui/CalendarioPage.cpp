@@ -1,4 +1,5 @@
 #include "ui/CalendarioPage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/AgendaRepository.h"
 #include "database/EventoRepository.h"
@@ -98,13 +99,18 @@ CalendarioPage::CalendarioPage(Repositorios &repos, QWidget *parent)
     botoes->addWidget(m_btnExcluir);
     painel->addLayout(botoes);
 
-    auto *legenda = new QLabel(QStringLiteral("Vermelho: feriado/recesso · Azul: prova · Verde: outros eventos · Sublinhado: prazo de tarefa"));
+    auto *legenda = new QLabel(QStringLiteral("Vermelho: feriado/recesso · Verde: prova · Ocre: outros eventos · Sublinhado: prazo de tarefa"));
     legenda->setObjectName(QStringLiteral("muted"));
     legenda->setWordWrap(true);
     painel->addWidget(legenda);
     corpo->addLayout(painel, 2);
     raiz->addLayout(corpo, 1);
 
+    // As marcações dos dias acompanham o tema.
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        if (isVisible())
+            carregarPeriodoVisivel();
+    });
     connect(m_calendario, &QCalendarWidget::selectionChanged, this, &CalendarioPage::mostrarDiaSelecionado);
     connect(m_calendario, &QCalendarWidget::currentPageChanged, this, [this] { carregarPeriodoVisivel(); });
     connect(m_btnNovo, &QPushButton::clicked, this, &CalendarioPage::novoEvento);
@@ -155,6 +161,12 @@ void CalendarioPage::carregarPeriodoVisivel()
         m_itens[a.data].append({a.tipo == QLatin1String("prova") ? QStringLiteral("prova") : QStringLiteral("avaliacao"),
                                 QStringLiteral("%1 — %2").arg(a.nome, a.turmaNome), 0});
 
+    // Fins de semana em danger (o vermelho padrão do Qt não tem contraste no tema escuro).
+    QTextCharFormat fimDeSemana;
+    fimDeSemana.setForeground(QBrush(ThemeManager::cor(Tokens::Id::Danger)));
+    m_calendario->setWeekdayTextFormat(Qt::Saturday, fimDeSemana);
+    m_calendario->setWeekdayTextFormat(Qt::Sunday, fimDeSemana);
+
     // Marca os dias no calendário (cores semitransparentes funcionam nos dois temas).
     m_calendario->setDateTextFormat(QDate(), QTextCharFormat());  // limpa todas as marcações
     for (auto it = m_itens.constBegin(); it != m_itens.constEnd(); ++it) {
@@ -169,13 +181,15 @@ void CalendarioPage::carregarPeriodoVisivel()
         }
         QTextCharFormat fmt;
         if (feriado)
-            fmt.setBackground(QBrush(QColor(214, 69, 69, 90)));
+            fmt.setBackground(QBrush(ThemeManager::comAlfa(Tokens::Id::Danger, 90)));
         else if (prova)
-            fmt.setBackground(QBrush(QColor(59, 111, 224, 90)));
+            fmt.setBackground(QBrush(ThemeManager::comAlfa(Tokens::Id::Primary, 90)));
         else if (evento)
-            fmt.setBackground(QBrush(QColor(46, 158, 91, 80)));
-        if (feriado || prova || evento)
+            fmt.setBackground(QBrush(ThemeManager::comAlfa(Tokens::Id::Accent, 80)));
+        if (feriado || prova || evento) {
             fmt.setFontWeight(QFont::Bold);
+            fmt.setForeground(QBrush(ThemeManager::cor(Tokens::Id::Ink)));  // legível sobre o fundo colorido
+        }
         if (tarefa) {
             fmt.setFontUnderline(true);
             fmt.setFontWeight(QFont::Bold);

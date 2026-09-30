@@ -1,4 +1,5 @@
 #include "ui/HorarioPage.h"
+#include "ui/ThemeManager.h"
 
 #include "database/HorarioRepository.h"
 #include "database/TurmaRepository.h"
@@ -76,6 +77,11 @@ HorarioPage::HorarioPage(HorarioRepository &horarios, TurmaRepository &turmas, Q
     m_timerMensagem = new QTimer(this);
     m_timerMensagem->setSingleShot(true);
     connect(m_timerMensagem, &QTimer::timeout, m_mensagem, &QLabel::clear);
+    // A legenda das turmas acompanha o tema (a grade se repinta sozinha).
+    connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, [this] {
+        if (isVisible())
+            recarregar();
+    });
 
     // A linha do "agora" anda: repinta a cada minuto.
     m_timerRelogio = new QTimer(this);
@@ -151,7 +157,7 @@ void HorarioPage::atualizarLegenda(const QList<Horario> &aulas)
             continue;
         vistas.insert(a.turmaId);
 
-        auto *chip = new QLabel(QStringLiteral("<span style='color:%1'>■</span> %2").arg(a.turmaCor, a.turmaNome.toHtmlEscaped()));
+        auto *chip = new QLabel(QStringLiteral("<span style='color:%1'>■</span> %2").arg(ThemeManager::corDaTurmaHex(a.turmaCor), a.turmaNome.toHtmlEscaped()));
         chip->setTextFormat(Qt::RichText);
         m_legenda->addWidget(chip);
     }
@@ -160,8 +166,7 @@ void HorarioPage::atualizarLegenda(const QList<Horario> &aulas)
 
 void HorarioPage::mostrarMensagem(const QString &texto, bool erro)
 {
-    m_mensagem->setStyleSheet(erro ? QStringLiteral("color: #D64545; font-weight: 600;")
-                                   : QStringLiteral("color: #2E9E5B; font-weight: 600;"));
+    ThemeManager::definirEstado(m_mensagem, erro ? ThemeManager::Estado::Erro : ThemeManager::Estado::Sucesso);
     m_mensagem->setText(texto);
     m_timerMensagem->start(5000);
 }
