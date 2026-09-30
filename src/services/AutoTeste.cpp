@@ -289,7 +289,7 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     const int aulaId = aulas.inserir(au);
     r.verificar(QStringLiteral("AulaRepository::inserir/listar"), aulaId > 0 && aulas.listar(turmaId).size() == 1, aulas.ultimoErro());
     r.verificar(QStringLiteral("AgendaRepository::aulasDoDia traz o tema do plano"),
-                agenda.aulasDoDia(QDate(2026, 10, 5)).value(0).tema == QLatin1String("Frações"));
+                agenda.aulasDoDia(QDate(2026, 10, 5)).value(0).tema == QStringLiteral("Frações"));  // QStringLiteral (UTF-8), não QLatin1String
 
     Anexo ax;
     ax.turmaId = turmaId;
