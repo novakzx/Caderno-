@@ -40,8 +40,22 @@ jobs:
           $curto = $env:GITHUB_SHA.Substring(0, 7)
           cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=OFF "-DPROFORG_BUILD_ID=$curto"
 
+      # Se a compilação falhar, as linhas com "error" viram uma anotação na página do build
+      # (assim os erros aparecem sem precisar abrir o log inteiro).
       - name: Compilar
-        run: cmake --build build --config Release --parallel
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel *> build.log
+          $codigo = $LASTEXITCODE
+          if ($codigo -ne 0) {
+            Get-Content build.log -Tail 120 | Write-Host
+            $erros = Select-String -Path build.log -Pattern "error [A-Z]+\d+|error:|fatal error|undefined reference|unresolved external" |
+              ForEach-Object { $_.Line.Trim() } | Select-Object -Unique | Select-Object -First 25
+            $texto = ($erros -join "`n")
+            $anotacao = ($texto -replace "%", "%25") -replace "`r", "" -replace "`n", "%0A"
+            Write-Host "::error title=Erros de compilacao::$anotacao"
+          }
+          exit $codigo
 
       - name: Rodar os testes
         run: ctest --test-dir build -C Release --output-on-failure
@@ -57,16 +71,43 @@ jobs:
           Get-ChildItem dist/ProfOrganizer -Recurse | Measure-Object Length -Sum |
             ForEach-Object { "{0} arquivos, {1:N1} MB" -f $_.Count, ($_.Sum / 1MB) }
 
+      # Autoteste: roda o .exe empacotado (sem janela) para abrir um banco novo, aplicar as
+      # migrações e exercitar todos os repositórios. Se falhar, mostra o relatório completo
+      # (também como anotação na página do build) e o passo fica vermelho.
+      - name: Autoteste (abre o banco e exercita os repositórios)
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist/ProfOrganizer/ProfOrganizer.exe").Path
+          $saida = Join-Path $env:RUNNER_TEMP "autoteste.txt"
+          $p = Start-Process -FilePath $exe -ArgumentList "--selftest", $saida -Wait -PassThru
+          if (Test-Path $saida) {
+            $texto = Get-Content $saida -Raw -Encoding UTF8
+            Copy-Item $saida "dist/ProfOrganizer/autoteste.txt"
+          } else {
+            $texto = "O autoteste nao gerou relatorio (codigo de saida $($p.ExitCode))."
+          }
+          Write-Host $texto
+          # Comandos de workflow: % vira %25 e quebra de linha vira %0A.
+          $anotacao = ($texto -replace "%", "%25") -replace "`r", "" -replace "`n", "%0A"
+          if ($p.ExitCode -ne 0) {
+            Write-Host "::error title=Autoteste falhou::$anotacao"
+            exit 1
+          }
+          Write-Host "::notice title=Autoteste passou::$anotacao"
+
       # O nome inclui o número da execução e o início do commit, para nunca confundir
       # o .exe novo com um antigo. O mesmo identificador aparece na barra de título do app.
+      # (always: o pacote é publicado mesmo se o autoteste falhar, junto com o autoteste.txt.)
       - name: Nome do pacote
         id: nome
+        if: always()
         shell: pwsh
         run: |
           $curto = $env:GITHUB_SHA.Substring(0, 7)
           "pacote=ProfOrganizer-build-$($env:GITHUB_RUN_NUMBER)-$curto" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Publicar o resultado
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.nome.outputs.pacote }}

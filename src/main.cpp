@@ -14,16 +14,25 @@
 #include "database/TarefaRepository.h"
 #include "database/TurmaRepository.h"
 #include "core/BuildInfo.h"
+#include "services/AutoTeste.h"
 #include "services/BackupService.h"
 #include "ui/MainWindow.h"
 #include "ui/ThemeManager.h"
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
 #include <QMessageBox>
 
 int main(int argc, char *argv[])
 {
+    // Modo autoteste (usado pelo GitHub Actions): sem janela e sem tocar nos dados
+    // do usuário. Uso: ProfOrganizer.exe --selftest relatorio.txt
+    if (argc >= 3 && QByteArray(argv[1]) == "--selftest") {
+        QCoreApplication app(argc, argv);
+        return AutoTeste::executar(QString::fromLocal8Bit(argv[2]));
+    }
+
     QApplication app(argc, argv);
 
     // Nome/organização definem a pasta de dados e as chaves do QSettings.
