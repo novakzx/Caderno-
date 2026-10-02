@@ -3,6 +3,7 @@
 
 #include "database/AlunoRepository.h"
 #include "database/AnotacaoRepository.h"
+#include "database/FrequenciaRepository.h"
 #include "database/OcorrenciaRepository.h"
 #include "database/Repositorios.h"
 #include "database/TurmaRepository.h"
@@ -10,6 +11,7 @@
 #include "ui/AnexosWidget.h"
 #include "ui/ImportarAlunosDialog.h"
 #include "ui/OcorrenciasDialog.h"
+#include "ui/SorteioDialog.h"
 #include "ui/TurmaDialog.h"
 
 #include <QCheckBox>
@@ -62,7 +64,8 @@ void configurarTabela(QTableWidget *t)
 
 TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     : QWidget(parent), m_turmas(repos.turmas), m_alunos(repos.alunos), m_anotacoes(repos.anotacoes),
-      m_ocorrencias(repos.ocorrencias)
+      m_ocorrencias(repos.ocorrencias),
+      m_frequencia(repos.frequencia)
 {
     auto *raiz = new QVBoxLayout(this);
     raiz->setContentsMargins(32, 28, 32, 24);
@@ -161,7 +164,11 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     m_btnEditarAluno = new QPushButton(QStringLiteral("Editar"));
     m_btnExcluirAluno = new QPushButton(QStringLiteral("Excluir"));
     m_btnExcluirAluno->setObjectName(QStringLiteral("danger"));
+    m_btnSorteio = new QPushButton(QStringLiteral("Sortear…"));
+    m_btnSorteio->setToolTip(QStringLiteral("Sortear um aluno ou montar grupos"));
+    ThemeManager::iconeNoBotao(m_btnSorteio, QStringLiteral("dado"));
     rodapeAlunos->addWidget(m_btnOcorrencias);
+    rodapeAlunos->addWidget(m_btnSorteio);
     rodapeAlunos->addStretch(1);
     rodapeAlunos->addWidget(m_btnEditarAluno);
     rodapeAlunos->addWidget(m_btnExcluirAluno);
@@ -219,6 +226,7 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     connect(m_btnNovoAluno, &QPushButton::clicked, this, &TurmasPage::novoAluno);
     connect(m_btnImportarAlunos, &QPushButton::clicked, this, &TurmasPage::importarAlunos);
     connect(m_btnOcorrencias, &QPushButton::clicked, this, &TurmasPage::abrirOcorrencias);
+    connect(m_btnSorteio, &QPushButton::clicked, this, &TurmasPage::abrirSorteio);
     connect(m_btnEditarAluno, &QPushButton::clicked, this, &TurmasPage::editarAluno);
     connect(m_btnExcluirAluno, &QPushButton::clicked, this, &TurmasPage::excluirAluno);
     connect(m_busca, &QLineEdit::textChanged, this, [this] { recarregarAlunos(alunoSelecionadoId()); });
@@ -454,6 +462,16 @@ void TurmasPage::novoAluno()
     recarregarAlunos(id);
 }
 
+void TurmasPage::abrirSorteio()
+{
+    const int turmaId = turmaSelecionadaId();
+    const auto turma = m_turmas.buscar(turmaId);
+    if (!turma)
+        return;
+    SorteioDialog dlg(m_alunos.listarPorTurma(turmaId, QString(), /*incluirInativos=*/false), m_frequencia, turmaId, turma->nome, this);
+    dlg.exec();
+}
+
 void TurmasPage::importarAlunos()
 {
     const int turmaId = turmaSelecionadaId();
@@ -535,6 +553,7 @@ void TurmasPage::atualizarEstadoBotoes()
     m_btnImportarAlunos->setEnabled(temTurma);
     m_busca->setEnabled(temTurma);
     m_btnOcorrencias->setEnabled(temAluno);
+    m_btnSorteio->setEnabled(temTurma);
     m_btnEditarAluno->setEnabled(temAluno);
     m_btnExcluirAluno->setEnabled(temAluno);
 }

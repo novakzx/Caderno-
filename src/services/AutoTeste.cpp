@@ -24,14 +24,29 @@
 #include "database/TurmaRepository.h"
 #include "services/BackupService.h"
 #include "services/ContaService.h"
+#include "services/AtualizacaoService.h"
+#include "services/CalendarioExport.h"
 #include "services/DesempenhoService.h"
+#include "services/IaPrompts.h"
+#include "services/IaService.h"
+#include "services/SegredoService.h"
 #include "services/ImportadorAlunos.h"
 #include "services/LembreteService.h"
 #include "services/XlsxService.h"
 #include "services/RelatorioPdf.h"
 
 #include <QColor>
+#include <QDateTime>
 #include <QDir>
+#include <QEventLoop>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkReply>
+#include <QPointer>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QTimer>
 #include <QElapsedTimer>
 #include <QRegularExpression>
 #include <QFile>
@@ -485,6 +500,28 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     r.verificar(QStringLiteral("BackupService::validarArquivo recusa arquivo que não é banco"),
                 !BackupService::validarArquivo(pasta + QStringLiteral("/nao-existe.db"), &erro));
 
+    // --- Exportação do calendário (.ics) ---
+    {
+        int totalIcs = 0;
+        const QDateTime geradoEm(QDate(2026, 10, 2), QTime(12, 0), Qt::UTC);
+        Evento malicioso;  // título com quebra de linha tentando criar um evento falso no arquivo
+        malicioso.titulo = QStringLiteral("Reunião\r\nBEGIN:VEVENT\r\nSUMMARY:falso");
+        malicioso.tipo = QStringLiteral("reuniao");
+        malicioso.dataInicio = QDate(2026, 10, 20);
+        const int maliciosoId = eventos.inserir(malicioso);
+        const QByteArray ics = CalendarioExport::gerarIcs(eventos, tarefas, agenda, QDate(2026, 10, 1), QDate(2026, 10, 31), geradoEm, &totalIcs);
+        const QString texto = QString::fromUtf8(ics);
+        r.verificar(QStringLiteral("CalendarioExport: eventos, feriado de vários dias e avaliação entram; tarefa concluída não"),
+                    totalIcs == 4 && texto.startsWith(QStringLiteral("BEGIN:VCALENDAR\r\n")) && texto.contains(QStringLiteral("SUMMARY:Prova: Prova de Matem")) &&
+                        texto.contains(QStringLiteral("DTEND;VALUE=DATE:20261014\r\n")) && texto.contains(QStringLiteral("DTSTAMP:20261002T120000Z")) &&
+                        !texto.contains(QStringLiteral("Corrigir provas")),
+                    QString::number(totalIcs));
+        r.verificar(QStringLiteral("CalendarioExport: quebra de linha no título NÃO cria evento falso (4 eventos, nenhum a mais)"),
+                    texto.count(QStringLiteral("\r\nBEGIN:VEVENT\r\n")) == 4 && !texto.contains(QStringLiteral("\r\nSUMMARY:falso")));
+        if (maliciosoId > 0)
+            eventos.remover(maliciosoId);
+    }
+
     // --- Importação de alunos (CSV / lista colada) ---
     {
         ImportadorAlunos importador(alunos);
@@ -661,7 +698,7 @@ void testeRecursosDoDesign(Relatorio &r)
                                    "subir", "baixar", "imagem", "usuario", "cadeado", "email", "olho", "olho-fechado",
                                    "sair", "chave", "janela-minimizar", "janela-maximizar", "janela-restaurar",
                                    "janela-fechar", "seta-baixo", "seta-cima", "seta-esquerda", "seta-direita", "marca",
-                                   "caderno-mark", "sino"};
+                                   "caderno-mark", "sino", "assistente", "ajustes", "dado", "copiar"};
     QStringList faltando;
     for (const char *nome : usados)
         if (!QFile::exists(QStringLiteral(":/icons/%1.svg").arg(QLatin1String(nome))))
@@ -841,6 +878,360 @@ void testeSeguranca(Relatorio &r, const QString &pasta)
                     !ehArquivoExecutavel(QStringLiteral("notas.xlsx")) && !ehArquivoExecutavel(QStringLiteral("foto.png")));
 }
 
+// ---------------------------------------------------------------------------
+// IA (Cloudflare Workers AI) e verificação de atualização, contra um servidor HTTP FALSO local (127.0.0.1):
+// confere o pedido que sai (caminho, token, corpo) e as respostas (fluxo SSE, JSON inteiro, erros, cancelamento,
+// redirecionamento). Não usa a internet nem nenhuma chave de verdade.
+// ---------------------------------------------------------------------------
+class ServidorFalso : public QObject {
+public:
+    struct Resposta {
+        int status = 200;
+        QByteArray tipo = "text/event-stream";
+        QList<QByteArray> partes;   // enviadas com um pequeno intervalo entre elas (testa linhas SSE cortadas ao meio)
+        QByteArray cabecalhoExtra;  // ex.: "Location: http://..."
+        bool naoResponder = false;  // mantém a conexão aberta (para testar cancelamento)
+    };
+
+    ServidorFalso()
+    {
+        m_servidor.listen(QHostAddress::LocalHost, 0);
+        connect(&m_servidor, &QTcpServer::newConnection, this, &ServidorFalso::novaConexao);
+    }
+
+    quint16 porta() const { return m_servidor.serverPort(); }
+    QString urlBase() const { return QStringLiteral("http://127.0.0.1:%1/client/v4").arg(porta()); }
+    QString urlDireta() const { return QStringLiteral("http://127.0.0.1:%1/repos/x/releases/latest").arg(porta()); }
+
+    Resposta resposta;
+    QByteArray ultimoPedido;  // cabeçalhos + corpo do último pedido
+    int conexoes = 0;
+
+private:
+    void novaConexao()
+    {
+        while (QTcpSocket *s = m_servidor.nextPendingConnection()) {
+            ++conexoes;
+            auto *buffer = new QByteArray;
+            connect(s, &QTcpSocket::readyRead, this, [this, s, buffer] {
+                *buffer += s->readAll();
+                const int fim = buffer->indexOf("\r\n\r\n");
+                if (fim < 0)
+                    return;
+                int tamanho = 0;
+                const int c = buffer->toLower().indexOf("content-length:");
+                if (c >= 0)
+                    tamanho = buffer->mid(c + 15, buffer->indexOf("\r\n", c) - c - 15).trimmed().toInt();
+                if (buffer->size() < fim + 4 + tamanho)
+                    return;  // corpo ainda incompleto
+                ultimoPedido = *buffer;
+                buffer->clear();
+                responder(s);
+            });
+            connect(s, &QTcpSocket::disconnected, s, &QObject::deleteLater);
+        }
+    }
+
+    void responder(QTcpSocket *s)
+    {
+        if (resposta.naoResponder)
+            return;
+        QByteArray cab = "HTTP/1.1 " + QByteArray::number(resposta.status) + " X\r\nContent-Type: " + resposta.tipo +
+                         "\r\nConnection: close\r\n";
+        if (!resposta.cabecalhoExtra.isEmpty())
+            cab += resposta.cabecalhoExtra + "\r\n";
+        cab += "\r\n";
+        s->write(cab);
+        s->flush();
+        const QList<QByteArray> partes = resposta.partes;
+        QPointer<QTcpSocket> p(s);
+        for (int i = 0; i < partes.size(); ++i) {
+            QTimer::singleShot(40 * (i + 1), s, [p, parte = partes.at(i)] {
+                if (p) {
+                    p->write(parte);
+                    p->flush();
+                }
+            });
+        }
+        QTimer::singleShot(40 * (partes.size() + 1), s, [p] {
+            if (p)
+                p->disconnectFromHost();
+        });
+    }
+
+    QTcpServer m_servidor;
+};
+
+ResultadoIa pedirIa(IaService &ia, const ConfigIa &config, int limiteMs = 8000, int cancelarEmMs = -1)
+{
+    QEventLoop laco;
+    ResultadoIa resultado;
+    bool recebeu = false;
+    QObject::connect(&ia, &IaService::concluido, &laco, [&](const ResultadoIa &r) {
+        resultado = r;
+        recebeu = true;
+        laco.quit();
+    });
+    QTimer::singleShot(limiteMs, &laco, &QEventLoop::quit);
+    if (cancelarEmMs >= 0)
+        QTimer::singleShot(cancelarEmMs, &ia, &IaService::cancelar);
+    ia.enviar(config, {{QStringLiteral("system"), QStringLiteral("Seja breve.")}, {QStringLiteral("user"), QStringLiteral("Diga olá")}}, 64);
+    if (!recebeu)  // (uma configuração inválida já responde dentro de enviar())
+        laco.exec();
+    if (!recebeu)
+        resultado.erro = QStringLiteral("(tempo esgotado no teste)");
+    return resultado;
+}
+
+void testeIaEAtualizacao(Relatorio &r)
+{
+    r.titulo(QStringLiteral("IA (Cloudflare Workers AI), atualização e segredos"));
+
+    const QString conta = QStringLiteral("0123456789abcdef0123456789abcdef");
+    const QString token = QStringLiteral("TOKEN_de-teste_1234567890abcdefXYZ");
+    ConfigIa config;
+    config.accountId = conta;
+    config.token = token;
+    config.modelo = IaService::modeloPadrao();
+
+    // --- Validação (nada de injeção em cabeçalho nem no caminho da URL) ---
+    r.verificar(QStringLiteral("IA: Account ID, token e modelo válidos são aceitos"),
+                IaService::accountIdValido(conta) && IaService::tokenValido(token) && IaService::modeloValido(IaService::modeloPadrao()) &&
+                    config.completa());
+    r.verificar(QStringLiteral("IA: Account ID com tamanho ou caracteres errados é recusado"),
+                !IaService::accountIdValido(QStringLiteral("123")) && !IaService::accountIdValido(conta + QLatin1Char('0')) &&
+                    !IaService::accountIdValido(QStringLiteral("zzzz456789abcdef0123456789abcdef")));
+    r.verificar(QStringLiteral("IA: token com quebra de linha, espaço ou curto demais é recusado (anti injeção de cabeçalho)"),
+                !IaService::tokenValido(token + QStringLiteral("\r\nX-Evil: 1")) && !IaService::tokenValido(token + QLatin1Char(' ')) &&
+                    !IaService::tokenValido(QStringLiteral("curto")) && !IaService::tokenValido(QString()));
+    r.verificar(QStringLiteral("IA: modelo com \"..\", outro domínio ou espaço é recusado (anti desvio de caminho)"),
+                !IaService::modeloValido(QStringLiteral("@cf/../admin")) && !IaService::modeloValido(QStringLiteral("http://x.com/y")) &&
+                    !IaService::modeloValido(QStringLiteral("@cf/meta/llama 3")) && !IaService::modeloValido(QStringLiteral("meta/llama")) &&
+                    !IaService::modeloValido(QStringLiteral("@cf/meta/llama?x=1")) &&
+                    IaService::modeloValido(QStringLiteral("@cf/meta/llama-3.3-70b-instruct-fp8-fast")));
+    r.verificar(QStringLiteral("IA: a URL de produção é HTTPS em api.cloudflare.com"),
+                IaService::urlDaApi(conta, IaService::modeloPadrao()).toString().startsWith(
+                    QStringLiteral("https://api.cloudflare.com/client/v4/accounts/%1/ai/run/@cf/meta/").arg(conta)) &&
+                    !IaService::urlDaApi(QStringLiteral("x"), IaService::modeloPadrao()).isValid());
+    r.verificar(QStringLiteral("IA: o servidor de teste só aceita 127.0.0.1 (nunca aponta o token para a internet)"), [&] {
+        IaService::usarServidorDeTeste(QStringLiteral("http://evil.example.com/v4"));
+        const bool recusou = IaService::urlDaApi(conta, IaService::modeloPadrao()).host() == QLatin1String("api.cloudflare.com");
+        return recusou;
+    }());
+
+    // --- Corpo do pedido e leitura do fluxo ---
+    {
+        const QByteArray corpo = IaService::montarCorpo({{QStringLiteral("system"), QStringLiteral("s")}, {QStringLiteral("admin"), QStringLiteral("u")}}, 99999, true);
+        const QJsonObject o = QJsonDocument::fromJson(corpo).object();
+        const QJsonArray msgs = o.value(QStringLiteral("messages")).toArray();
+        r.verificar(QStringLiteral("IA: corpo do pedido (mensagens, papel inválido vira \"user\", max_tokens limitado, stream)"),
+                    msgs.size() == 2 && msgs.at(0).toObject().value(QStringLiteral("role")).toString() == QStringLiteral("system") &&
+                        msgs.at(1).toObject().value(QStringLiteral("role")).toString() == QStringLiteral("user") &&
+                        o.value(QStringLiteral("max_tokens")).toInt() == 4096 && o.value(QStringLiteral("stream")).toBool());
+        r.verificar(QStringLiteral("IA: sem fluxo o corpo não leva \"stream\""),
+                    !QJsonDocument::fromJson(IaService::montarCorpo({{QStringLiteral("user"), QStringLiteral("x")}}, 10, false)).object().contains(QStringLiteral("stream")));
+    }
+    r.verificar(QStringLiteral("IA: linhas do fluxo SSE (trecho, [DONE], evento vazio, lixo, formato estilo OpenAI)"),
+                IaService::trechoDaLinhaSse("data: {\"response\":\"Ol\"}") == QStringLiteral("Ol") &&
+                    !IaService::trechoDaLinhaSse("data: [DONE]").has_value() && !IaService::trechoDaLinhaSse(": comentario").has_value() &&
+                    IaService::trechoDaLinhaSse("data: {\"p\":\"x\"}") == QString() &&
+                    IaService::trechoDaLinhaSse("data: nao-e-json") == QString() &&
+                    IaService::trechoDaLinhaSse("data: {\"choices\":[{\"delta\":{\"content\":\"oi\"}}]}") == QStringLiteral("oi"));
+    r.verificar(QStringLiteral("IA: resposta inteira em JSON (result.response)"),
+                IaService::textoDaResposta("{\"result\":{\"response\":\"Tudo\"},\"success\":true}") == QStringLiteral("Tudo") &&
+                    IaService::textoDaResposta("lixo").isEmpty());
+    r.verificar(QStringLiteral("IA: mensagens de erro úteis (token, limite diário, sem internet) e sem expor o token"),
+                IaService::mensagemDeErro(401, "{\"errors\":[{\"message\":\"Authentication error\"}]}", QNetworkReply::AuthenticationRequiredError).contains(QStringLiteral("token")) &&
+                    IaService::mensagemDeErro(429, QByteArray(), QNetworkReply::UnknownContentError).contains(QStringLiteral("limite")) &&
+                    IaService::mensagemDeErro(0, QByteArray(), QNetworkReply::HostNotFoundError).contains(QStringLiteral("internet")) &&
+                    IaService::mensagemDeErro(503, QByteArray(), QNetworkReply::UnknownContentError).contains(QStringLiteral("problemas")) &&
+                    !IaService::mensagemDeErro(401, QByteArray(), QNetworkReply::AuthenticationRequiredError).contains(token));
+
+    // --- Contra o servidor falso ---
+    ServidorFalso servidor;
+    r.verificar(QStringLiteral("servidor falso local iniciado"), servidor.porta() != 0);
+    IaService::usarServidorDeTeste(servidor.urlBase());
+    IaService ia;
+
+    // 1) fluxo SSE com linhas cortadas ao meio entre os pedaços
+    {
+        servidor.resposta = ServidorFalso::Resposta();
+        servidor.resposta.partes = {QByteArray("data: {\"response\":\"Ol\"}\n\ndata: {\"res"), QByteArray("ponse\":\"\xC3\xA1!\"}\n\ndata: [DONE]\n\n")};
+        QString acumulado;
+        const QMetaObject::Connection ligacao = QObject::connect(&ia, &IaService::trecho, &ia, [&acumulado](const QString &t) { acumulado += t; });
+        const ResultadoIa res = pedirIa(ia, config);
+        r.verificar(QStringLiteral("IA (servidor falso): fluxo SSE com linha cortada ao meio chega inteiro (\"Olá!\")"),
+                    res.ok && res.texto == QStringLiteral("Olá!") && acumulado == QStringLiteral("Olá!"), res.erro + res.texto);
+        const QByteArray pedido = servidor.ultimoPedido;
+        const QByteArray corpo = pedido.mid(pedido.indexOf("\r\n\r\n") + 4);
+        const QJsonObject o = QJsonDocument::fromJson(corpo).object();
+        r.verificar(QStringLiteral("IA (servidor falso): o pedido leva o token no cabeçalho Authorization, no caminho certo, com stream e as mensagens"),
+                    pedido.startsWith("POST /client/v4/accounts/" + conta.toLatin1() + "/ai/run/") &&
+                        pedido.contains("llama-3.1-8b-instruct-fp8") &&
+                        pedido.toLower().contains("authorization: bearer " + token.toLower().toLatin1()) && o.value(QStringLiteral("stream")).toBool() &&
+                        o.value(QStringLiteral("messages")).toArray().size() == 2,
+                    QString::fromLatin1(pedido.left(260)));
+        r.verificar(QStringLiteral("IA (servidor falso): o token NÃO vai na URL nem no corpo"),
+                    !pedido.left(pedido.indexOf("\r\n")).contains(token.toLatin1()) && !corpo.contains(token.toLatin1()));
+        QObject::disconnect(ligacao);
+    }
+    // 2) resposta inteira em JSON (sem fluxo)
+    {
+        servidor.resposta = ServidorFalso::Resposta();
+        servidor.resposta.tipo = "application/json";
+        servidor.resposta.partes = {QByteArray("{\"result\":{\"response\":\"Texto inteiro\"},\"success\":true,\"errors\":[],\"messages\":[]}")};
+        const ResultadoIa res = pedirIa(ia, config);
+        r.verificar(QStringLiteral("IA (servidor falso): resposta inteira em JSON também funciona"), res.ok && res.texto == QStringLiteral("Texto inteiro"), res.erro);
+    }
+    // 3) erros HTTP
+    {
+        servidor.resposta = ServidorFalso::Resposta();
+        servidor.resposta.status = 401;
+        servidor.resposta.tipo = "application/json";
+        servidor.resposta.partes = {QByteArray("{\"success\":false,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}]}")};
+        const ResultadoIa res = pedirIa(ia, config);
+        r.verificar(QStringLiteral("IA (servidor falso): 401 vira uma mensagem sobre o token (com o detalhe do serviço)"),
+                    !res.ok && res.statusHttp == 401 && res.erro.contains(QStringLiteral("token")) && res.erro.contains(QStringLiteral("Authentication error")), res.erro);
+        servidor.resposta.status = 429;
+        servidor.resposta.partes = {QByteArray("{\"errors\":[]}")};
+        const ResultadoIa limite = pedirIa(ia, config);
+        r.verificar(QStringLiteral("IA (servidor falso): 429 explica o limite diário"), !limite.ok && limite.erro.contains(QStringLiteral("limite")), limite.erro);
+    }
+    // 4) resposta vazia
+    {
+        servidor.resposta = ServidorFalso::Resposta();
+        servidor.resposta.partes = {QByteArray("data: [DONE]\n\n")};
+        const ResultadoIa res = pedirIa(ia, config);
+        r.verificar(QStringLiteral("IA (servidor falso): resposta sem texto vira erro claro"), !res.ok && !res.erro.isEmpty(), res.erro);
+    }
+    // 5) redirecionamento NÃO é seguido (o token não pode ir para outro endereço)
+    {
+        ServidorFalso destino;
+        servidor.resposta = ServidorFalso::Resposta();
+        servidor.resposta.status = 302;
+        servidor.resposta.tipo = "text/plain";
+        servidor.resposta.cabecalhoExtra = "Location: http://127.0.0.1:" + QByteArray::number(destino.porta()) + "/roubar";
+        const ResultadoIa res = pedirIa(ia, config);
+        r.verificar(QStringLiteral("IA (servidor falso): redirecionamento não é seguido e o outro endereço não recebe o token"),
+                    !res.ok && destino.conexoes == 0 && destino.ultimoPedido.isEmpty(), res.erro);
+    }
+    // 6) cancelamento
+    {
+        servidor.resposta = ServidorFalso::Resposta();
+        servidor.resposta.naoResponder = true;
+        const ResultadoIa res = pedirIa(ia, config, 6000, /*cancelarEmMs=*/250);
+        r.verificar(QStringLiteral("IA (servidor falso): cancelar interrompe o pedido"), res.cancelado && !res.ok && !ia.ocupado());
+    }
+    // 7) configuração inválida nem chega à rede
+    {
+        ConfigIa ruim = config;
+        ruim.token = QStringLiteral("abc\r\nHost: evil");
+        const int antes = servidor.conexoes;
+        const ResultadoIa res = pedirIa(ia, ruim, 3000);
+        r.verificar(QStringLiteral("IA: configuração inválida é recusada antes de abrir qualquer conexão"),
+                    !res.ok && !res.erro.isEmpty() && servidor.conexoes == antes, res.erro);
+    }
+    IaService::usarServidorDeTeste(QString());
+
+    // --- Verificação de atualização ---
+    r.verificar(QStringLiteral("Atualização: só aceita URL de Releases do repositório (https, github.com, sem usuário nem porta)"),
+                AtualizacaoService::urlConfiavel(QStringLiteral("https://github.com/novakzx/Caderno-/releases/tag/v1.2.0")) &&
+                    AtualizacaoService::urlConfiavel(QStringLiteral("https://github.com/novakzx/Caderno-/releases")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("http://github.com/novakzx/Caderno-/releases/tag/v1")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("https://github.com.evil.com/novakzx/Caderno-/releases/tag/v1")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("https://github.com/outro/repo/releases/tag/v1")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("https://usuario@github.com/novakzx/Caderno-/releases/tag/v1")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("https://github.com:444/novakzx/Caderno-/releases/tag/v1")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("https://github.com/novakzx/Caderno-/releases/../../x")) &&
+                    !AtualizacaoService::urlConfiavel(QStringLiteral("javascript:alert(1)")));
+    {
+        const auto nova = AtualizacaoService::interpretar(
+            "{\"tag_name\":\"v9.9.9\",\"html_url\":\"https://github.com/novakzx/Caderno-/releases/tag/v9.9.9\"}", QStringLiteral("1.1.0"));
+        r.verificar(QStringLiteral("Atualização: versão mais nova é detectada, com o link da Release"),
+                    nova.ok && nova.temNova && nova.versao == QStringLiteral("9.9.9") && nova.url.endsWith(QStringLiteral("/tag/v9.9.9")));
+        const auto fraude = AtualizacaoService::interpretar("{\"tag_name\":\"v9.9.9\",\"html_url\":\"https://evil.example/baixar.exe\"}", QStringLiteral("1.1.0"));
+        r.verificar(QStringLiteral("Atualização: link de fora é trocado pela página oficial de Releases"),
+                    fraude.ok && fraude.url == AtualizacaoService::paginaDeReleases());
+        const auto igual = AtualizacaoService::interpretar("{\"tag_name\":\"v1.1.0\",\"html_url\":\"\"}", QStringLiteral("1.1.0"));
+        const auto lixo = AtualizacaoService::interpretar("{\"tag_name\":\"nightly\"}", QStringLiteral("1.1.0"));
+        r.verificar(QStringLiteral("Atualização: mesma versão não é \"nova\"; etiqueta ilegível e JSON inválido dão erro"),
+                    igual.ok && !igual.temNova && !lixo.ok && !lixo.erro.isEmpty() && !AtualizacaoService::interpretar("<html>", QStringLiteral("1.1.0")).ok);
+    }
+    {
+        ServidorFalso github;
+        github.resposta.tipo = "application/json";
+        github.resposta.partes = {QByteArray("{\"tag_name\":\"v9.9.9\",\"html_url\":\"https://github.com/novakzx/Caderno-/releases/tag/v9.9.9\"}")};
+        AtualizacaoService::usarServidorDeTeste(github.urlDireta());
+        AtualizacaoService servico;
+        QEventLoop laco;
+        ResultadoAtualizacao res;
+        QObject::connect(&servico, &AtualizacaoService::concluido, &laco, [&](const ResultadoAtualizacao &x) {
+            res = x;
+            laco.quit();
+        });
+        QTimer::singleShot(6000, &laco, &QEventLoop::quit);
+        servico.verificar(QStringLiteral("1.1.0"));
+        laco.exec();
+        r.verificar(QStringLiteral("Atualização (servidor falso): consulta, interpreta e não envia dados do usuário"),
+                    res.ok && res.temNova && !github.ultimoPedido.toLower().contains("authorization") && github.ultimoPedido.toLower().contains("user-agent: caderno+/") &&
+                        !github.ultimoPedido.toLower().contains("cookie"),
+                    res.erro + QString::fromLatin1(github.ultimoPedido.left(300)));
+
+        github.resposta.status = 404;
+        QEventLoop laco2;
+        ResultadoAtualizacao semRelease;
+        QObject::connect(&servico, &AtualizacaoService::concluido, &laco2, [&](const ResultadoAtualizacao &x) {
+            semRelease = x;
+            laco2.quit();
+        });
+        QTimer::singleShot(6000, &laco2, &QEventLoop::quit);
+        servico.verificar(QStringLiteral("1.1.0"));
+        laco2.exec();
+        r.verificar(QStringLiteral("Atualização (servidor falso): 404 (nenhuma Release ainda) vira mensagem, sem travar"), !semRelease.ok && !semRelease.erro.isEmpty());
+        AtualizacaoService::usarServidorDeTeste(QString());
+    }
+
+    // --- Proteção da chave (DPAPI do Windows) ---
+    if (SegredoService::disponivel()) {
+        const QString segredo = QStringLiteral("chave-secreta-ü-1234567890");
+        const QString protegido = SegredoService::proteger(segredo);
+        QString adulterado = protegido;
+        adulterado[adulterado.size() / 2] = (adulterado[adulterado.size() / 2] == QLatin1Char('A')) ? QLatin1Char('B') : QLatin1Char('A');
+        r.verificar(QStringLiteral("Segredo (DPAPI): vai e volta, e o texto protegido não contém a chave"),
+                    !protegido.isEmpty() && !protegido.contains(QStringLiteral("secreta")) && SegredoService::revelar(protegido) == segredo);
+        r.verificar(QStringLiteral("Segredo (DPAPI): texto adulterado ou inventado não abre"),
+                    SegredoService::revelar(adulterado).isEmpty() && SegredoService::revelar(QStringLiteral("bGl4by1pbnZhbGlkbw==")).isEmpty() &&
+                        SegredoService::revelar(QString()).isEmpty() && SegredoService::proteger(QString()).isEmpty());
+    } else {
+        r.info(QStringLiteral("proteção de segredos indisponível neste sistema (só Windows): teste ignorado"));
+    }
+
+    // --- Pedidos para a IA (prompts) ---
+    {
+        IaPrompts::Pedido p;
+        p.tarefa = IaPrompts::Tarefa::PlanoDeAula;
+        p.disciplina = QStringLiteral("Matemática");
+        p.serie = QStringLiteral("8º ano");
+        p.tema = QStringLiteral("Equações do 1º grau");
+        p.duracao = QStringLiteral("50 minutos");
+        p.detalhes = QStringLiteral("sem projetor");
+        const auto m = IaPrompts::montar(p);
+        r.verificar(QStringLiteral("Prompts: o plano de aula leva só o que o professor preencheu, em português, com aviso de não usar dados de alunos"),
+                    m.size() == 2 && m.at(0).papel == QStringLiteral("system") && m.at(0).conteudo.contains(QStringLiteral("português")) &&
+                        m.at(0).conteudo.contains(QStringLiteral("dados pessoais")) && m.at(1).conteudo.contains(QStringLiteral("Equações do 1º grau")) &&
+                        m.at(1).conteudo.contains(QStringLiteral("Matemática")) && m.at(1).conteudo.contains(QStringLiteral("sem projetor")));
+        IaPrompts::Pedido livre;
+        livre.tarefa = IaPrompts::Tarefa::Livre;
+        livre.detalhes = QStringLiteral("Explique fotossíntese") + QChar(0) + QLatin1Char(' ') + QChar(0x202e) + QStringLiteral(" em 3 linhas");
+        const QString texto = IaPrompts::montar(livre).at(1).conteudo;
+        r.verificar(QStringLiteral("Prompts: caracteres de controle e invisíveis são removidos do que vai para o serviço"),
+                    texto.contains(QStringLiteral("Explique fotossíntese")) && !texto.contains(QChar(0)) && !texto.contains(QChar(0x202e)));
+        r.verificar(QStringLiteral("Prompts: texto enorme é cortado no limite e pedido vazio ganha um texto padrão"),
+                    IaPrompts::limpar(QString(10000, QLatin1Char('a')), 200).size() == 200 &&
+                        !IaPrompts::montar(IaPrompts::Pedido{IaPrompts::Tarefa::Livre, {}, {}, {}, {}, {}, 5}).at(1).conteudo.isEmpty());
+    }
+}
+
 }  // namespace
 
 int executar(const QString &arquivoSaida)
@@ -879,6 +1270,7 @@ int executar(const QString &arquivoSaida)
         testeRecursosDoDesign(r);
         testeContas(r, pasta.path());
         testeSeguranca(r, pasta.path());
+        testeIaEAtualizacao(r);
 
         // 2) As variantes só interessam como diagnóstico; rodam sempre, mas são
         //    obrigatórias apenas quando a abertura principal falhou.

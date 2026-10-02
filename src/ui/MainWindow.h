@@ -2,11 +2,14 @@
 
 #include "database/BuscaRepository.h"
 
+#include <QElapsedTimer>
 #include <QList>
 #include <QMainWindow>
 #include <QString>
 
 class AnotacoesPage;
+class AssistentePage;
+class AtualizacaoService;
 class AulasPage;
 class BarraDeTitulo;
 class BotaoNav;
@@ -15,6 +18,7 @@ class GerenteDeLembretes;
 class PilhaAnimada;
 class QButtonGroup;
 class QLabel;
+class QPushButton;
 class QTimer;
 class QVBoxLayout;
 class TarefasPage;
@@ -33,6 +37,9 @@ public:
     MainWindow(Repositorios &repos, const QString &nomeUsuario, const QString &emailUsuario,
                QWidget *parent = nullptr);
     ~MainWindow() override;
+
+    // A janela foi fechada pelo bloqueio por inatividade (o login mostra um aviso).
+    bool bloqueadaPorInatividade() const { return m_bloqueadaPorInatividade; }
 
 signals:
     // O usuário pediu "Sair": a janela fecha e o programa volta para a tela de login.
@@ -54,7 +61,9 @@ private:
     void abrirBusca();
     void navegarPara(const ItemBusca &item);
     void abrirBackup();
-    void abrirLembretes();
+    void abrirConfiguracoes(int aba);  // aba = ConfiguracoesDialog::Aba
+    void verificarInatividade();
+    void verificarAtualizacao();
     void trazerParaFrente();
     void verificarBackupAutomatico(int intervaloHoras);
 
@@ -73,6 +82,12 @@ private:
     QList<BotaoNav *> m_botoesNav;  // para recolorir os ícones quando o tema muda
     QTimer *m_timerBackup = nullptr;
     GerenteDeLembretes *m_lembretes = nullptr;
+    AssistentePage *m_paginaAssistente = nullptr;
+    AtualizacaoService *m_atualizacao = nullptr;
+    QPushButton *m_botaoNovaVersao = nullptr;
+    QTimer *m_timerInatividade = nullptr;
+    QElapsedTimer m_ultimaAtividade;
+    bool m_bloqueadaPorInatividade = false;
     bool m_cursorDeBorda = false;
 
     // Páginas que recebem navegação vinda da busca global e de outras telas.

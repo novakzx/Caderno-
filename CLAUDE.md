@@ -62,8 +62,17 @@ Qt 6 Widgets + SQLite + QXlsx, C++17, CMake. Tudo offline. Textos da interface e
   Só avisa com o programa aberto. Preferências em `ui/LembretesDialog` (QSettings `lembretes/...`).
 - **Importar alunos**: `core/CsvUtil.h` (leitor de CSV puro), `services/ImportadorAlunos` (planejar → conferir → executar, numa transação),
   `XlsxService::lerTabela`, `ui/ImportarAlunosDialog`. Nada é gravado antes de a pessoa confirmar; limites de tamanho/linhas.
-- **Instalador e Release**: `installer/Caderno.iss` (Inno Setup, sem administrador, não apaga dados) e, no workflow, o job `publicar` (só em etiqueta `v*`,
-  com `contents: write` apenas nele). O `AppId` do `.iss` não pode mudar.
+- **Instalador e Release**: `installer/setup` (instalador PRÓPRIO em Win32 + GDI+, sem Qt: `janela.cpp` desenha tudo à mão; `instalar.cpp` copia/registra/
+  desinstala; `pacote.cpp` + `inflate.cpp` leem o pacote anexado ao .exe), `installer/empacotar.py` (monta o pacote) e `installer/testar-instalador.ps1`
+  (teste de ponta a ponta, roda no CI). O job `publicar` só roda em etiqueta `v*` (com `contents: write` apenas nele). Não mudar o nome da chave de registro
+  `CadernoPlus`, de `Desinstalar.exe` nem de `desinstalar.lst` (as versões instaladas dependem deles). Os atalhos de teste usam `--shortcuts-in`: nunca
+  rode o teste com `--delete-data` (apagaria os dados reais).
+- **IA**: `services/IaService` (Cloudflare Workers AI, SSE), `IaPrompts`, `SegredoService` (DPAPI), `ui/AssistentePage`, `ui/ConfiguracoesDialog`
+  (4 abas: Segurança, Lembretes, Atualizações, IA). Nunca anexar dados do banco ao pedido; resposta sempre como texto simples. Guia: `docs/GUIA-IA.md`.
+- **Outros**: `core/VersaoUtil.h` + `services/AtualizacaoService` (aviso de versão, opcional), `core/SorteioUtil.h` + `ui/SorteioDialog`,
+  `core/IcsUtil.h` + `services/CalendarioExport` (.ics), bloqueio por inatividade em `MainWindow::verificarInatividade`.
+  Preferências em QSettings (`services/Preferencias`). Roteiro de funções futuras: `docs/ROTEIRO.md`.
+- Ao rodar o autoteste/teste do instalador na máquina de quem desenvolve, não apagar nada em `D:\toolchain` (a pasta é protegida): usar pastas temporárias.
 - Janela principal com **mínimo 1100x680** (a tela Turmas não cabe em menos); a barra lateral cabe em 680 de altura, então ao acrescentar botões
   no rodapé confira isso (`D:\toolchain\shot2` tem uma checagem, fora do repositório).
 - Guias para o dono do projeto: `docs/GUIA-CLASSROOM.md` (integração/automações) e `docs/GUIA-PUBLICAR.md` (distribuição).

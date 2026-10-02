@@ -41,6 +41,7 @@ private:
     };
 
     void carregarPeriodoVisivel();
+    void exportarIcs();
     void mostrarDiaSelecionado();
     void atualizarBotoes();
     void novoEvento();

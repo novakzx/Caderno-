@@ -2,20 +2,23 @@
 
 #include "core/BuildInfo.h"
 #include "database/Repositorios.h"
+#include "services/AtualizacaoService.h"
 #include "services/BackupService.h"
+#include "services/Preferencias.h"
 #include "ui/AnexosWidget.h"
 #include "ui/AnotacoesPage.h"
+#include "ui/AssistentePage.h"
 #include "ui/AulasPage.h"
 #include "ui/BackupDialog.h"
 #include "ui/BarraDeTitulo.h"
 #include "ui/BotoesAnimados.h"
 #include "ui/BuscaDialog.h"
 #include "ui/CalendarioPage.h"
+#include "ui/ConfiguracoesDialog.h"
 #include "ui/FrequenciaPage.h"
 #include "ui/GerenteDeLembretes.h"
 #include "ui/HojePage.h"
 #include "ui/HorarioPage.h"
-#include "ui/LembretesDialog.h"
 #include "ui/NotasPage.h"
 #include "ui/PilhaAnimada.h"
 #include "ui/RelatoriosPage.h"
@@ -23,19 +26,25 @@
 #include "ui/ThemeManager.h"
 #include "ui/TurmasPage.h"
 
+#include <QApplication>
 #include <QButtonGroup>
 #include <QCloseEvent>
+#include <QDesktopServices>
+#include <QDialog>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
+#include <QMessageBox>
 #include <QMouseEvent>
+#include <QPushButton>
 #include <QSettings>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWindow>
 #include <utility>
@@ -53,7 +62,7 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
     setWindowFlag(Qt::FramelessWindowHint, true);  // sem a barra de título do sistema
     setWindowTitle(QStringLiteral("Caderno+"));    // aparece só na barra de tarefas
     resize(1280, 820);
-    setMinimumSize(1100, 680);
+    setMinimumSize(1100, 720);
     statusBar()->setSizeGripEnabled(false);
 
     auto *central = new QWidget;
@@ -110,6 +119,11 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
 
     adicionarSecao(QStringLiteral("relatorios"), QStringLiteral("Relatórios"), new RelatoriosPage(repos));
 
+    m_paginaAssistente = new AssistentePage(repos);
+    adicionarSecao(QStringLiteral("assistente"), QStringLiteral("Assistente"), m_paginaAssistente);
+    connect(m_paginaAssistente, &AssistentePage::configurarSolicitado, this,
+            [this] { abrirConfiguracoes(static_cast<int>(ConfiguracoesDialog::Aba::Ia)); });
+
     // Ícones e cores da barra lateral acompanham o tema claro/escuro.
     atualizarAparencia();
     connect(&ThemeManager::notificador(), &ThemeNotifier::temaMudou, this, &MainWindow::atualizarAparencia);
@@ -139,8 +153,34 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
     connect(m_lembretes, &GerenteDeLembretes::abrirSolicitado, this, &MainWindow::trazerParaFrente);
     connect(m_lembretes, &GerenteDeLembretes::configurarSolicitado, this, [this] {
         trazerParaFrente();
-        abrirLembretes();
+        abrirConfiguracoes(static_cast<int>(ConfiguracoesDialog::Aba::Lembretes));
     });
+
+    // Bloqueio por inatividade: sem mexer no programa pelo tempo escolhido, volta para a tela de login.
+    m_ultimaAtividade.start();
+    m_timerInatividade = new QTimer(this);
+    connect(m_timerInatividade, &QTimer::timeout, this, &MainWindow::verificarInatividade);
+    m_timerInatividade->start(15 * 1000);
+
+    // Aviso de versão nova (só se a pessoa quiser; nunca baixa nada sozinho).
+    m_atualizacao = new AtualizacaoService(this);
+    connect(m_atualizacao, &AtualizacaoService::concluido, this, [this](const ResultadoAtualizacao &r) {
+        if (r.ok)
+            Preferencias::marcarVerificacaoDeAtualizacao();
+        if (!r.ok || !r.temNova)
+            return;
+        if (!m_botaoNovaVersao) {
+            m_botaoNovaVersao = new QPushButton;
+            m_botaoNovaVersao->setObjectName(QStringLiteral("link"));
+            m_botaoNovaVersao->setCursor(Qt::PointingHandCursor);
+            statusBar()->addPermanentWidget(m_botaoNovaVersao);
+        }
+        m_botaoNovaVersao->setText(QStringLiteral("Nova versão %1 disponível. Baixar").arg(r.versao));
+        m_botaoNovaVersao->disconnect();
+        const QString url = r.url;
+        connect(m_botaoNovaVersao, &QPushButton::clicked, this, [url] { QDesktopServices::openUrl(QUrl(url)); });
+    });
+    QTimer::singleShot(6000, this, &MainWindow::verificarAtualizacao);
 
     // Ctrl+K: busca global
     auto *atalhoBusca = new QShortcut(QKeySequence(QStringLiteral("Ctrl+K")), this);
@@ -205,9 +245,10 @@ void MainWindow::construirBarraLateral(QWidget *barra, const QString &nomeUsuari
     connect(botaoBusca, &QAbstractButton::clicked, this, &MainWindow::abrirBusca);
     layout->addWidget(botaoBusca);
 
-    auto *botaoLembretes = novoBotaoDoRodape(QStringLiteral("sino"), QStringLiteral("Lembretes"));
-    connect(botaoLembretes, &QAbstractButton::clicked, this, &MainWindow::abrirLembretes);
-    layout->addWidget(botaoLembretes);
+    auto *botaoConfig = novoBotaoDoRodape(QStringLiteral("ajustes"), QStringLiteral("Configurações"));
+    connect(botaoConfig, &QAbstractButton::clicked, this,
+            [this] { abrirConfiguracoes(static_cast<int>(ConfiguracoesDialog::Aba::Seguranca)); });
+    layout->addWidget(botaoConfig);
 
     auto *botaoBackup = novoBotaoDoRodape(QStringLiteral("backup"), QStringLiteral("Backup"));
     connect(botaoBackup, &QAbstractButton::clicked, this, &MainWindow::abrirBackup);
@@ -344,6 +385,19 @@ void MainWindow::atualizarCursorDaBorda(Qt::Edges borda)
 
 bool MainWindow::eventFilter(QObject *objeto, QEvent *evento)
 {
+    // Qualquer toque no mouse ou no teclado conta como atividade (zera o relógio do bloqueio).
+    switch (evento->type()) {
+    case QEvent::MouseMove:
+    case QEvent::MouseButtonPress:
+    case QEvent::KeyPress:
+    case QEvent::Wheel:
+    case QEvent::TouchBegin:
+        m_ultimaAtividade.restart();
+        break;
+    default:
+        break;
+    }
+
     // Clicar na assinatura "Caderno+" arrasta a janela (como a barra de título).
     if (objeto == m_titulo && evento->type() == QEvent::MouseButtonPress) {
         auto *mouse = static_cast<QMouseEvent *>(evento);
@@ -441,10 +495,49 @@ void MainWindow::abrirBackup()
     dlg.exec();
 }
 
-void MainWindow::abrirLembretes()
+void MainWindow::abrirConfiguracoes(int aba)
 {
-    LembretesDialog dlg(*m_lembretes, this);
+    ConfiguracoesDialog dlg(*m_lembretes, static_cast<ConfiguracoesDialog::Aba>(aba), this);
     dlg.exec();
+}
+
+void MainWindow::verificarInatividade()
+{
+    const int minutos = Preferencias::bloqueioEmMinutos();
+    if (minutos <= 0 || m_ultimaAtividade.elapsed() < static_cast<qint64>(minutos) * 60 * 1000)
+        return;
+    // Fecha qualquer diálogo aberto (cada tela salva o que estava editando ao ser escondida/fechada) e volta ao login.
+    for (QWidget *w : QApplication::topLevelWidgets()) {
+        if (w != this && w->isVisible()) {
+            if (auto *dialogo = qobject_cast<QDialog *>(w))
+                dialogo->reject();
+        }
+    }
+    m_bloqueadaPorInatividade = true;
+    emit trocarContaSolicitado();
+    close();
+}
+
+void MainWindow::verificarAtualizacao()
+{
+    if (Preferencias::verificarAtualizacoes() == Preferencias::Atualizacao::NaoPerguntado) {
+        QMessageBox caixa(this);
+        caixa.setIcon(QMessageBox::Question);
+        caixa.setWindowTitle(QStringLiteral("Atualizações"));
+        caixa.setText(QStringLiteral("Avisar quando houver uma versão nova do Caderno+?"));
+        caixa.setInformativeText(QStringLiteral("O programa consulta o GitHub no máximo uma vez por dia. Nenhum dado seu é enviado e nada é "
+                                                "baixado sozinho. Você pode mudar isso em Configurações."));
+        auto *sim = caixa.addButton(QStringLiteral("Sim, avisar"), QMessageBox::AcceptRole);
+        caixa.addButton(QStringLiteral("Não, obrigado"), QMessageBox::RejectRole);
+        caixa.exec();
+        Preferencias::definirVerificarAtualizacoes(caixa.clickedButton() == sim);
+    }
+    if (Preferencias::verificarAtualizacoes() != Preferencias::Atualizacao::Sim)
+        return;
+    const QDateTime ultima = Preferencias::ultimaVerificacaoDeAtualizacao();
+    if (ultima.isValid() && ultima.secsTo(QDateTime::currentDateTime()) < 24 * 3600)
+        return;
+    m_atualizacao->verificar(versaoDoApp());
 }
 
 // Clique numa notificação (ou no ícone da bandeja): mostra a janela e vai para o painel "Hoje".

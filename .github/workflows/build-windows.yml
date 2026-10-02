@@ -120,10 +120,17 @@ jobs:
           }
           Write-Host "::notice title=Autoteste passou::$anotacao"
 
-      # Instalador (Inno Setup), pacote portátil (.zip) e hashes SHA-256, tudo em release/.
-      # Em etiqueta "vX.Y.Z" a versão vem dela (e precisa bater com o CMakeLists.txt);
-      # nos demais builds vira "dev-<commit>".
-      - name: Instalador (Inno Setup)
+      # Instalador próprio do Caderno+ (installer/setup: um .exe só, sem dependências), pacote portátil (.zip)
+      # e hashes SHA-256, tudo em release/. Em etiqueta "vX.Y.Z" a versão vem dela (e precisa bater com o
+      # CMakeLists.txt); nos demais builds vira "dev-<commit>".
+      - name: Compilar o instalador
+        shell: pwsh
+        run: |
+          cmake -S installer/setup -B build-setup -A x64
+          cmake --build build-setup --config Release
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Montar e testar o instalador
         id: instalador
         shell: pwsh
         env:
@@ -146,27 +153,15 @@ jobs:
             $versao = "dev-$curto"
           }
 
-          # O Inno Setup costuma vir instalado nos executores do GitHub; se nao vier, instala pelo Chocolatey.
-          function Achar-Iscc {
-            $c = Get-Command iscc -ErrorAction SilentlyContinue
-            if ($c) { return $c.Source }
-            foreach ($p in @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")) {
-              if (Test-Path $p) { return $p }
-            }
-            return $null
-          }
-          $iscc = Achar-Iscc
-          if (-not $iscc) {
-            choco install innosetup --no-progress -y
-            $iscc = Achar-Iscc
-          }
-          if (-not $iscc) { Write-Host "::error title=Inno Setup::Nao foi possivel encontrar o ISCC.exe."; exit 1 }
-
-          & $iscc "/DVersao=$versao" installer/Caderno.iss
+          New-Item -ItemType Directory -Force release | Out-Null
+          python installer/empacotar.py --stub build-setup/Release/CadernoSetup.exe --pasta dist/ProfOrganizer --versao $versao --saida "release/Caderno-Setup-$versao.exe"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-          New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "dist/Caderno-Setup-$versao.exe" release/
+          # Teste de ponta a ponta, sem janela: instala, confere, atualiza por cima, recusa pacote corrompido/malicioso e desinstala.
+          & installer/testar-instalador.ps1 -Instalador "release/Caderno-Setup-$versao.exe" -Stub build-setup/Release/CadernoSetup.exe `
+            -PastaDoPrograma dist/ProfOrganizer -Trabalho "$env:RUNNER_TEMP/teste-instalador"
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error title=Teste do instalador falhou::veja o log do passo"; exit 1 }
+
           Compress-Archive -Path dist/ProfOrganizer -DestinationPath "release/Caderno-$versao-portatil.zip"
           Get-ChildItem release -File | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name

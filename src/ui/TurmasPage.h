@@ -5,6 +5,7 @@
 class AlunoRepository;
 class AnexosWidget;
 class AnotacaoRepository;
+class FrequenciaRepository;
 class OcorrenciaRepository;
 struct Repositorios;
 class QCheckBox;
@@ -48,6 +49,7 @@ private:
     void editarAluno();
     void excluirAluno();
     void abrirOcorrencias();
+    void abrirSorteio();
     void importarAlunos();
 
     void atualizarEstadoBotoes();
@@ -57,6 +59,7 @@ private:
     AlunoRepository &m_alunos;
     AnotacaoRepository &m_anotacoes;
     OcorrenciaRepository &m_ocorrencias;
+    FrequenciaRepository &m_frequencia;
 
     QTabWidget *m_abas = nullptr;
     AnexosWidget *m_anexos = nullptr;
@@ -74,6 +77,7 @@ private:
     QPushButton *m_btnImportarAlunos = nullptr;
     QPushButton *m_btnNovoAluno = nullptr;
     QPushButton *m_btnOcorrencias = nullptr;
+    QPushButton *m_btnSorteio = nullptr;
     QPushButton *m_btnEditarAluno = nullptr;
     QPushButton *m_btnExcluirAluno = nullptr;
 };

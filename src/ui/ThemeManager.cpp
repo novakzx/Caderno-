@@ -257,6 +257,10 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
             border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
         QLabel#seloAtencao, QFrame#card QLabel#seloAtencao { background: transparent; color: @{warning}; border: 1px solid @{warning};
             border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
+        /* Sorteio da sala de aula e barra de progresso da IA */
+        QLabel#nomeSorteado { font-size: 34px; font-weight: 700; color: @{primary}; background: transparent; }
+        QProgressBar { background: @{surface-300}; border: none; border-radius: 2px; }
+        QProgressBar::chunk { background: @{primary}; border-radius: 2px; }
         QScrollArea { background: transparent; border: none; }
         QScrollArea > QWidget > QWidget { background: transparent; }
 

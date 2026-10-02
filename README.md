@@ -18,6 +18,9 @@ Tudo offline: os dados ficam num único arquivo SQLite no computador.
 | 🔍 Busca (Ctrl+K) | Procura em tudo, ignorando acentos e maiúsculas |
 | 💾 Backup | Automático a cada 24 h; salvar cópia; restaurar |
 | 🔔 Lembretes | Notificações do Windows: aula prestes a começar, tarefas e provas de hoje/amanhã |
+| ✨ Assistente | IA gratuita (Cloudflare Workers AI): plano de aula, questões, atividades, comunicados (`docs/GUIA-IA.md`) |
+| 🎲 Sorteio | Sortear aluno e montar grupos equilibrados (em Turmas) |
+| ⚙️ Configurações | Bloqueio por inatividade, lembretes, aviso de versão nova e IA |
 
 ## Compilar e rodar no Windows com Qt Creator
 
@@ -64,8 +67,8 @@ Detalhes e o aviso do SmartScreen em `docs/GUIA-PUBLICAR.md`.
 ```
 ctest --test-dir build --output-on-failure
 ```
-Oito testes sem Qt: `test_media`, `test_horario`, `test_frequencia`, `test_contraste`, `test_conta`, `test_atencao` (alunos em atenção e tipos
-de ocorrência), `test_lembrete` (quando avisar) e `test_csv` (leitor de CSV). O autoteste (`ProfOrganizer.exe --selftest relatorio.txt`) exercita
+Nove testes sem Qt: `test_media`, `test_horario`, `test_frequencia`, `test_contraste`, `test_conta`, `test_atencao` (alunos em atenção e tipos
+de ocorrência), `test_lembrete` (quando avisar), `test_csv` (leitor de CSV) e `test_utilitarios` (versões, sorteios e calendário .ics). O autoteste (`ProfOrganizer.exe --selftest relatorio.txt`) exercita
 também o banco, as migrações, os repositórios, as contas, a importação e os lembretes. No Qt Creator: Build → Run CTest.
 
 ### Distribuir para outro PC (opcional)
@@ -109,6 +112,23 @@ Por segurança, executáveis e scripts (`.exe`, `.bat`, `.js`…) não são anex
 **Nome** (obrigatório), Matrícula, E-mail, Nascimento (aceita "Aluno", "RA", "Data de nascimento"...). Uma lista de uma coluna só, sem títulos, vale como
 lista de nomes. Use **Baixar modelo** para ver o formato. Você vê tudo antes de gravar: quem já está na turma (mesma matrícula, ou mesmo nome sem matrícula)
 e as linhas repetidas ou inválidas são ignoradas; e-mail ou data inválidos viram aviso. Limites: 5 MB (texto) e 5.000 linhas.
+
+### Assistente de IA
+A tela **Assistente** gera textos para a aula com o Cloudflare Workers AI (gratuito até 10.000 "neurons" por dia). Você cria uma conta gratuita e
+cola o Account ID e um token em **Configurações > Assistente de IA**; o passo a passo está em `docs/GUIA-IA.md`. Só o texto que você escreve nos campos
+é enviado (nunca dados do banco), a chave fica protegida pelo Windows, e toda resposta deve ser revisada antes do uso.
+
+### Sorteio e grupos
+Em **Turmas > Sortear…**: sorteia um aluno (sem repetir até todos saírem, opcionalmente só os presentes hoje) ou divide a turma em grupos equilibrados
+(por quantidade de grupos ou de alunos por grupo), com botão de copiar.
+
+### Calendário no celular
+Em **Calendário > Exportar .ics…** o programa grava um arquivo com eventos, provas, prazos de tarefas pendentes e avaliações datadas, que abre no
+Google Agenda, Outlook e no calendário do celular.
+
+### Segurança e atualizações
+Em **Configurações** você escolhe o bloqueio por inatividade (a janela volta ao login depois de N minutos parada) e se quer o aviso de versão nova
+(consulta o GitHub no máximo uma vez por dia; nunca baixa nem instala nada sozinho).
 
 ### Lembretes
 O botão **Lembretes** (barra lateral) liga as notificações do Windows: aula prestes a começar (5 a 30 min antes, ou desligado), tarefas e provas de hoje e de

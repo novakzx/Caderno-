@@ -23,6 +23,9 @@ public:
 
     Conta conta() const { return m_conta; }
 
+    // Mensagem logo abaixo dos campos de entrada (ex.: sessão bloqueada por inatividade).
+    void definirAviso(const QString &texto);
+
 protected:
     void mousePressEvent(QMouseEvent *evento) override;
     void showEvent(QShowEvent *evento) override;

@@ -63,10 +63,13 @@ int main(int argc, char *argv[])
     }
 
     // Uma "sessão" por conta: login -> janela principal. "Sair da conta" volta ao login.
+    bool bloqueadoPorInatividade = false;
     for (;;) {
         // Se já existe um banco de antes das contas, a primeira conta criada vai ficar com ele.
         const bool haDadosAntigos = !contas.temContas() && QFileInfo::exists(DatabaseManager::caminhoPadrao());
         LoginDialog login(contas, haDadosAntigos);
+        if (bloqueadoPorInatividade)
+            login.definirAviso(QStringLiteral("Sessão bloqueada por inatividade. Entre de novo para continuar."));
         if (login.exec() != QDialog::Accepted)
             return 0;
         const Conta conta = login.conta();
@@ -125,6 +128,7 @@ int main(int argc, char *argv[])
         janela.show();
 
         app.exec();
+        bloqueadoPorInatividade = janela.bloqueadaPorInatividade();
         if (!trocarDeConta)
             break;
         // (a janela, os repositórios e o banco são destruídos aqui, antes do próximo login)

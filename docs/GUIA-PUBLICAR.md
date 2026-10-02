@@ -31,16 +31,43 @@ instalador com a versão errada). A permissão de escrita (`contents: write`) ex
 > Esta parte foi escrita e revisada, mas a primeira etiqueta real é o teste final: depois de criá-la, confira em Actions que o job
 > "Publicar a Release" ficou verde e baixe o instalador **num computador limpo** antes de divulgar.
 
-### 1.2 O instalador (Inno Setup)
+### 1.2 O instalador (próprio, em installer/setup)
 
-O script é `installer/Caderno.iss`. O instalador:
+O Caderno+ tem um **instalador próprio**: um único `.exe`, sem dependências, com a mesma aparência do programa (fundo escuro,
+animações, barra de progresso). Ele foi escrito com Win32 + GDI+ (não usa Qt), e os arquivos do programa vão **anexados ao fim do
+próprio `.exe`**, comprimidos (veja `installer/empacotar.py` e `installer/setup/src/pacote.h`). Ele:
 
-- instala **só para o usuário atual** (sem pedir administrador), em `%LOCALAPPDATA%\Programs\Caderno+`;
-- cria o atalho no Menu Iniciar (e, se a pessoa marcar, na área de trabalho) e o desinstalador;
-- **atualiza por cima** de uma versão anterior (o `AppId` é fixo: não o altere) e pede para fechar o Caderno+ se estiver aberto;
-- **não apaga os dados** (`%APPDATA%\ProfOrganizer`) ao desinstalar; avisa onde eles ficam.
+- instala **só para o usuário atual** (sem pedir administrador), em `%LOCALAPPDATA%\Programs\Caderno+` (dá para escolher outra pasta);
+- cria o atalho no Menu Iniciar (e na área de trabalho, se a pessoa deixar marcado), o desinstalador e a entrada em
+  **Configurações > Aplicativos**;
+- **atualiza por cima** de uma versão anterior (fecha o Caderno+ se estiver aberto, troca os arquivos e remove os que não existem mais);
+  se encontrar uma instalação feita pelo instalador antigo (Inno Setup), assume a pasta dela;
+- **não apaga os dados** (`%APPDATA%\ProfOrganizer`) ao desinstalar, a menos que a pessoa marque "Apagar também os meus dados"
+  (com confirmação);
+- só apaga ao desinstalar os arquivos que **ele mesmo instalou** (lista em `desinstalar.lst`): se a pessoa guardou algo na pasta,
+  fica lá;
+- confere o CRC-32 de cada arquivo ao instalar e **recusa** pacote corrompido ou com caminhos como `../` (nada é gravado antes de conferir).
 
-Para gerar localmente (com o Inno Setup 6 instalado e a pasta `dist\ProfOrganizer` pronta): `iscc /DVersao=1.2.0 installer\Caderno.iss`.
+Opções de linha de comando (úteis para TI da escola): `CadernoSetup.exe --silent [--dir PASTA] [--no-desktop] [--run]` instala sem
+janela; `Desinstalar.exe --silent [--delete-data]` remove sem janela. Códigos de saída: 0 ok, 2 opção inválida, 3 pacote corrompido,
+4 falha ao instalar/remover.
+
+O **CI testa o instalador de ponta a ponta** a cada build (`installer/testar-instalador.ps1`): instala, confere cada arquivo
+(SHA-256), roda o autoteste do programa instalado, atualiza por cima, recusa pacote corrompido e malicioso, desinstala e confere a
+limpeza (arquivos, atalhos e registro). Para gerar e testar localmente, com o Qt e o CMake no PATH:
+
+```bash
+cmake -S installer/setup -B build-setup -A x64 && cmake --build build-setup --config Release
+python installer/empacotar.py --stub build-setup/Release/CadernoSetup.exe --pasta dist/ProfOrganizer --versao 1.1.0 --saida release/Caderno-Setup-1.1.0.exe
+pwsh installer/testar-instalador.ps1 -Instalador release/Caderno-Setup-1.1.0.exe -Stub build-setup/Release/CadernoSetup.exe -PastaDoPrograma dist/ProfOrganizer -Trabalho $env:TEMP/teste-instalador
+```
+
+Para só **ver as telas** (sem instalar nada): `CadernoSetup.exe --capture PASTA` grava um PNG de cada tela.
+
+Limites honestos: o instalador não é acessível por leitores de tela como um instalador padrão do Windows (a janela é desenhada à mão;
+o teclado funciona: Tab, setas, Enter, Espaço, Esc). Quem precisar de acessibilidade total ou instalação em massa pode usar o `.zip`
+portátil ou o modo `--silent`. E, como todo instalador sem assinatura digital, o Windows e alguns antivírus podem desconfiar dele
+(veja o item 1.3).
 
 ### 1.3 O aviso azul do Windows (SmartScreen)
 

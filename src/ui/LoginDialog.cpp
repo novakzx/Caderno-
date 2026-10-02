@@ -253,6 +253,13 @@ QPushButton *botaoLink(const QString &texto)
 
 }  // namespace
 
+void LoginDialog::definirAviso(const QString &texto)
+{
+    m_entrarErro->setText(texto);
+    ThemeManager::definirEstado(m_entrarErro, ThemeManager::Estado::Aviso);
+    m_entrarErro->setVisible(true);
+}
+
 QWidget *LoginDialog::criarFormEntrar()
 {
     auto *pagina = new QWidget;

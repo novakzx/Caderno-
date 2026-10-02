@@ -6,11 +6,15 @@
 #include "database/Repositorios.h"
 #include "database/TarefaRepository.h"
 #include "database/TurmaRepository.h"
+#include "services/CalendarioExport.h"
 #include "ui/EventoDialog.h"
 
 #include <QBrush>
 #include <QCalendarWidget>
 #include <QColor>
+#include <QDateTime>
+#include <QFile>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -75,7 +79,15 @@ CalendarioPage::CalendarioPage(Repositorios &repos, QWidget *parent)
     auto *subtitulo = new QLabel(QStringLiteral(
         "Provas, feriados, reuniões, prazos de tarefas e avaliações. Dias marcados têm algo acontecendo."));
     subtitulo->setObjectName(QStringLiteral("pageSubtitle"));
-    raiz->addWidget(titulo);
+    auto *linhaTitulo = new QHBoxLayout;
+    linhaTitulo->addWidget(titulo);
+    linhaTitulo->addStretch(1);
+    auto *exportar = new QPushButton(QStringLiteral("Exportar .ics…"));
+    exportar->setToolTip(QStringLiteral("Salvar o calendário em um arquivo para o Google Agenda, Outlook ou celular"));
+    ThemeManager::iconeNoBotao(exportar, QStringLiteral("baixar"));
+    linhaTitulo->addWidget(exportar);
+    connect(exportar, &QPushButton::clicked, this, &CalendarioPage::exportarIcs);
+    raiz->addLayout(linhaTitulo);
     raiz->addWidget(subtitulo);
     raiz->addSpacing(12);
 
@@ -131,6 +143,34 @@ CalendarioPage::CalendarioPage(Repositorios &repos, QWidget *parent)
     connect(m_btnExcluir, &QPushButton::clicked, this, &CalendarioPage::excluirEvento);
     connect(m_lista, &QListWidget::itemSelectionChanged, this, &CalendarioPage::atualizarBotoes);
     connect(m_lista, &QListWidget::itemDoubleClicked, this, [this] { abrirItemSelecionado(); });
+}
+
+void CalendarioPage::exportarIcs()
+{
+    // Do começo do ano atual ao fim do próximo: cobre o ano letivo inteiro.
+    const int ano = QDate::currentDate().year();
+    const QDate de(ano, 1, 1), ate(ano + 1, 12, 31);
+    int total = 0;
+    const QByteArray ics = CalendarioExport::gerarIcs(m_eventos, m_tarefas, m_agenda, de, ate, QDateTime::currentDateTime(), &total);
+    if (total == 0) {
+        QMessageBox::information(this, QStringLiteral("Nada para exportar"),
+                                 QStringLiteral("Não há eventos, tarefas pendentes com prazo ou avaliações com data nesse período."));
+        return;
+    }
+    const QString caminho = QFileDialog::getSaveFileName(this, QStringLiteral("Salvar o calendário"), QStringLiteral("caderno-calendario.ics"),
+                                                         QStringLiteral("Calendário (*.ics)"));
+    if (caminho.isEmpty())
+        return;
+    QFile arquivo(caminho);
+    if (!arquivo.open(QIODevice::WriteOnly) || arquivo.write(ics) != ics.size()) {
+        QMessageBox::critical(this, QStringLiteral("Não foi possível salvar"),
+                              QStringLiteral("Não foi possível gravar o arquivo: %1").arg(arquivo.errorString()));
+        return;
+    }
+    QMessageBox::information(this, QStringLiteral("Calendário exportado"),
+                             QStringLiteral("%1 itens foram salvos. No Google Agenda use Configurações > Importar e exportar; no Outlook, "
+                                            "abra o arquivo.")
+                                 .arg(total));
 }
 
 void CalendarioPage::showEvent(QShowEvent *evento)

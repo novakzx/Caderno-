@@ -18,7 +18,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # Widgets: interface · Sql: SQLite · Svg: ícones da barra lateral · (PDF usa QPdfWriter, do Qt Gui)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Svg)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Svg Network)
 
 # --- QXlsx (importar/exportar .xlsx) -------------------------------------------
 # A biblioteca fica em third_party/QXlsx (veja o README, passo "Baixar o QXlsx").
@@ -54,7 +54,11 @@ qt_add_executable(ProfOrganizer WIN32 MACOSX_BUNDLE ${SOURCES} ${RECURSOS})
 target_include_directories(ProfOrganizer PRIVATE src)
 # Número da versão: uma só fonte (a linha project(... VERSION) acima). Vai para o código como PROFORG_VERSION.
 target_compile_definitions(ProfOrganizer PRIVATE PROFORG_VERSION="${PROJECT_VERSION}")
-target_link_libraries(ProfOrganizer PRIVATE Qt6::Widgets Qt6::Sql Qt6::Svg QXlsx::QXlsx)
+target_link_libraries(ProfOrganizer PRIVATE Qt6::Widgets Qt6::Sql Qt6::Svg Qt6::Network QXlsx::QXlsx)
+# crypt32: proteção da chave de API pela DPAPI do Windows (services/SegredoService)
+if(WIN32)
+    target_link_libraries(ProfOrganizer PRIVATE crypt32)
+endif()
 
 # Identificação do build (início do hash do commit), passada pelo workflow:
 #   cmake ... -DPROFORG_BUILD_ID=6d9e0f0
@@ -66,7 +70,7 @@ endif()
 
 # --- Testes (sem Qt): ctest --test-dir build ------------------------------------
 enable_testing()
-foreach(nome media horario frequencia contraste conta atencao lembrete csv)
+foreach(nome media horario frequencia contraste conta atencao lembrete csv utilitarios)
     add_executable(test_${nome} tests/test_${nome}.cpp)
     target_include_directories(test_${nome} PRIVATE src)
     add_test(NAME ${nome} COMMAND test_${nome})

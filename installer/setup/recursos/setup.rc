@@ -1,0 +1,35 @@
+#include "recursos.h"
+
+// Ícone do instalador (o mesmo do programa) e recursos usados pela janela.
+IDI_ICONE ICON "../../../resources/icons/app.ico"
+IDR_LOGO RCDATA "../../../resources/icons/icon-512.png"
+IDR_FONTE_REGULAR RCDATA "../../../resources/fonts/Figtree-Regular.ttf"
+IDR_FONTE_NEGRITO RCDATA "../../../resources/fonts/Figtree-Bold.ttf"
+
+// Manifesto: DPI por monitor (nítido em telas 125%/150%), controles modernos e sem pedir administrador.
+1 24 "setup.manifest"
+
+1 VERSIONINFO
+FILEVERSION 1,1,0,0
+PRODUCTVERSION 1,1,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041604B0"
+    BEGIN
+      VALUE "CompanyName", "Caderno+"
+      VALUE "FileDescription", "Instalador do Caderno+"
+      VALUE "FileVersion", "1.1.0"
+      VALUE "InternalName", "CadernoSetup"
+      VALUE "OriginalFilename", "CadernoSetup.exe"
+      VALUE "ProductName", "Caderno+"
+      VALUE "ProductVersion", "1.1.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0416, 1200
+  END
+END

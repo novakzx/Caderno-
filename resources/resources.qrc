@@ -48,6 +48,10 @@
         <file alias="caderno-mark.svg">icons/caderno-mark.svg</file>
         <file alias="limpar.svg">icons/limpar.svg</file>
         <file alias="sino.svg">icons/sino.svg</file>
+        <file alias="assistente.svg">icons/assistente.svg</file>
+        <file alias="ajustes.svg">icons/ajustes.svg</file>
+        <file alias="dado.svg">icons/dado.svg</file>
+        <file alias="copiar.svg">icons/copiar.svg</file>
     </qresource>
     <qresource prefix="/fonts">
         <file alias="Figtree-Regular.ttf">fonts/Figtree-Regular.ttf</file>
