@@ -1,13 +1,17 @@
 #pragma once
 
+#include "core/AtencaoUtil.h"
 #include "models/Aluno.h"
 #include "models/Avaliacao.h"
 #include "models/Frequencia.h"
+#include "models/Ocorrencia.h"
 #include "models/Turma.h"
 
+#include <QDate>
 #include <QList>
 #include <QVector>
 #include <optional>
+#include <vector>
 
 struct Repositorios;
 
@@ -42,6 +46,21 @@ struct FichaAluno {
     ResumoFrequencia frequencia;
     std::optional<double> frequenciaPct;
     QList<RegistroFrequencia> ocorrencias;  // faltas, justificadas e atrasos (mais recentes primeiro)
+    QList<Ocorrencia> historico;            // ocorrências registradas sobre o aluno (mais recentes primeiro)
+};
+
+// Um aluno do painel "Alunos em atenção", com os números que justificam o alerta.
+struct AlunoEmAtencao {
+    int alunoId = 0;
+    int turmaId = 0;
+    QString nome;
+    QString turmaNome;
+    QString turmaCor;
+    std::optional<double> media;           // média ponderada (0-10)
+    std::optional<double> frequenciaPct;   // nullopt = sem chamadas registradas
+    int ocorrenciasNegativas = 0;          // recentes (conduta, dificuldade)
+    AtencaoUtil::Nivel nivel = AtencaoUtil::Nivel::Nenhum;
+    std::vector<AtencaoUtil::Motivo> motivos;
 };
 
 // Junta notas, médias e frequência. Só orquestra repositórios e regras puras
@@ -52,6 +71,10 @@ public:
 
     std::optional<Boletim> boletim(int turmaId, int periodo);
     std::optional<FichaAluno> ficha(int alunoId);
+
+    // Alunos ativos das turmas não arquivadas que pedem atenção (média, frequência ou ocorrências;
+    // regras em core/AtencaoUtil.h). Os mais graves vêm primeiro, depois por nome.
+    QList<AlunoEmAtencao> alunosEmAtencao(double notaCorte, const QDate &hoje);
 
     // Quantos alunos caem em cada faixa de média (faixas iguais entre 0 e `maximo`).
     static QVector<int> distribuicaoDeMedias(const Boletim &boletim, int faixas = 5, double maximo = 10.0);

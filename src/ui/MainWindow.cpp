@@ -12,8 +12,10 @@
 #include "ui/BuscaDialog.h"
 #include "ui/CalendarioPage.h"
 #include "ui/FrequenciaPage.h"
+#include "ui/GerenteDeLembretes.h"
 #include "ui/HojePage.h"
 #include "ui/HorarioPage.h"
+#include "ui/LembretesDialog.h"
 #include "ui/NotasPage.h"
 #include "ui/PilhaAnimada.h"
 #include "ui/RelatoriosPage.h"
@@ -51,7 +53,7 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
     setWindowFlag(Qt::FramelessWindowHint, true);  // sem a barra de título do sistema
     setWindowTitle(QStringLiteral("Caderno+"));    // aparece só na barra de tarefas
     resize(1280, 820);
-    setMinimumSize(1000, 680);
+    setMinimumSize(1100, 680);
     statusBar()->setSizeGripEnabled(false);
 
     auto *central = new QWidget;
@@ -83,7 +85,8 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
     setCentralWidget(central);
 
     // --- Seções (na ordem da barra lateral) ---
-    adicionarSecao(QStringLiteral("hoje"), QStringLiteral("Hoje"), new HojePage(repos.agenda, repos.tarefas));
+    auto *paginaHoje = new HojePage(repos);
+    adicionarSecao(QStringLiteral("hoje"), QStringLiteral("Hoje"), paginaHoje);
 
     m_paginaTurmas = new TurmasPage(repos);
     adicionarSecao(QStringLiteral("turmas"), QStringLiteral("Turmas"), m_paginaTurmas);
@@ -116,6 +119,10 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
         m_paginaAnotacoes->selecionarAnotacao(id);
         irParaPagina(m_paginaAnotacoes);
     });
+    connect(paginaHoje, &HojePage::abrirAlunoSolicitado, this, [this](int turmaId, int alunoId) {
+        m_paginaTurmas->selecionarTurma(turmaId, alunoId);
+        irParaPagina(m_paginaTurmas);
+    });
     connect(m_paginaCalendario, &CalendarioPage::abrirTarefaSolicitada, this, [this](int id) {
         m_paginaTarefas->selecionarTarefa(id);
         irParaPagina(m_paginaTarefas);
@@ -126,6 +133,14 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
         auto *atalho = new QShortcut(QKeySequence(QStringLiteral("Ctrl+%1").arg((i + 1) % 10)), this);
         connect(atalho, &QShortcut::activated, this, [this, i] { irParaSecao(i); });
     }
+
+    // Lembretes do Windows (aulas prestes a começar, tarefas e provas): notificações pela área de notificação.
+    m_lembretes = new GerenteDeLembretes(repos.agenda, repos.tarefas, emailUsuario, this);
+    connect(m_lembretes, &GerenteDeLembretes::abrirSolicitado, this, &MainWindow::trazerParaFrente);
+    connect(m_lembretes, &GerenteDeLembretes::configurarSolicitado, this, [this] {
+        trazerParaFrente();
+        abrirLembretes();
+    });
 
     // Ctrl+K: busca global
     auto *atalhoBusca = new QShortcut(QKeySequence(QStringLiteral("Ctrl+K")), this);
@@ -189,6 +204,10 @@ void MainWindow::construirBarraLateral(QWidget *barra, const QString &nomeUsuari
     auto *botaoBusca = novoBotaoDoRodape(QStringLiteral("busca"), QStringLiteral("Buscar  (Ctrl+K)"));
     connect(botaoBusca, &QAbstractButton::clicked, this, &MainWindow::abrirBusca);
     layout->addWidget(botaoBusca);
+
+    auto *botaoLembretes = novoBotaoDoRodape(QStringLiteral("sino"), QStringLiteral("Lembretes"));
+    connect(botaoLembretes, &QAbstractButton::clicked, this, &MainWindow::abrirLembretes);
+    layout->addWidget(botaoLembretes);
 
     auto *botaoBackup = novoBotaoDoRodape(QStringLiteral("backup"), QStringLiteral("Backup"));
     connect(botaoBackup, &QAbstractButton::clicked, this, &MainWindow::abrirBackup);
@@ -420,6 +439,24 @@ void MainWindow::abrirBackup()
 {
     BackupDialog dlg(this);
     dlg.exec();
+}
+
+void MainWindow::abrirLembretes()
+{
+    LembretesDialog dlg(*m_lembretes, this);
+    dlg.exec();
+}
+
+// Clique numa notificação (ou no ícone da bandeja): mostra a janela e vai para o painel "Hoje".
+void MainWindow::trazerParaFrente()
+{
+    if (isMinimized())
+        showNormal();
+    else
+        show();
+    raise();
+    activateWindow();
+    irParaSecao(0);
 }
 
 void MainWindow::verificarBackupAutomatico(int intervaloHoras)

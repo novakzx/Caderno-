@@ -1,6 +1,7 @@
 #include "services/RelatorioPdf.h"
 
 #include "core/FrequenciaUtil.h"
+#include "core/OcorrenciaUtil.h"
 #include "core/Tokens.h"
 
 #include <QDate>
@@ -211,6 +212,19 @@ QString htmlFicha(const FichaAluno &f, double notaCorte)
             h += QStringLiteral("<tr>") + celula(r.data.toString(QStringLiteral("dd/MM/yyyy")), QStringLiteral("align='center'")) +
                  celula(situacaoPorExtenso(r.situacao), QStringLiteral("align='center'")) +
                  celula(esc(r.justificativa)) + QStringLiteral("</tr>");
+        h += QStringLiteral("</table>");
+    }
+
+    if (!f.historico.isEmpty()) {
+        h += QStringLiteral("<h2>Ocorrências registradas</h2>"
+                            "<table border='1' cellspacing='0' cellpadding='4' width='100%'><tr>"
+                            "<th>Data</th><th align='left'>Tipo</th><th align='left'>Descrição</th></tr>");
+        for (const Ocorrencia &o : f.historico) {
+            const QString tipo = QString::fromUtf8(OcorrenciaUtil::tipoDe(o.tipo.toStdString()).rotulo);
+            h += QStringLiteral("<tr>") + celula(o.data.toString(QStringLiteral("dd/MM/yyyy")), QStringLiteral("align='center'")) +
+                 celula(esc(tipo)) + celula(esc(o.texto).replace(QLatin1Char('\n'), QStringLiteral("<br>"))) +
+                 QStringLiteral("</tr>");
+        }
         h += QStringLiteral("</table>");
     }
 

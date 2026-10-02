@@ -249,6 +249,30 @@ static Migracao migracaoCoresDeTurma()
     return m;
 }
 
+// ---------------------------------------------------------------------------
+// Migração 6: ocorrências por aluno (elogio, conduta, dificuldade, contato com a família...).
+// `tipo` guarda o id de OcorrenciaUtil::kTipos; não há CHECK de propósito, para que novos tipos
+// não exijam recriar a tabela. Apagar o aluno apaga as ocorrências dele.
+// ---------------------------------------------------------------------------
+static Migracao migracaoOcorrencias()
+{
+    Migracao m;
+    m.versao = 6;
+    m.descricao = QStringLiteral("Ocorrências por aluno");
+    m.comandos = {
+        R"(CREATE TABLE ocorrencias (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id   INTEGER NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+            data       TEXT    NOT NULL,
+            tipo       TEXT    NOT NULL DEFAULT 'outro',
+            texto      TEXT    NOT NULL DEFAULT '',
+            criada_em  TEXT    NOT NULL DEFAULT (datetime('now'))
+        ))",
+        "CREATE INDEX idx_ocorrencias_aluno ON ocorrencias(aluno_id, data)",
+    };
+    return m;
+}
+
 const QList<Migracao> &todas()
 {
     // Para evoluir o esquema, acrescente novas migrações AQUI, no fim
@@ -259,6 +283,7 @@ const QList<Migracao> &todas()
         migracaoIndicesHoje(),
         migracaoAnotacoesFrequencia(),
         migracaoCoresDeTurma(),
+        migracaoOcorrencias(),
     };
     return lista;
 }

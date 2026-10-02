@@ -217,7 +217,7 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
         /* Tabelas */
         QTableWidget, QTableView { background: @{surface-200}; alternate-background-color: @{surface-300};
             border: 1px solid @{line}; border-radius: 10px; gridline-color: @{line};
-            selection-background-color: @{primary-soft}; selection-color: @{ink}; }
+            selection-background-color: @{primary-soft}; selection-color: @{ink}; outline: none; }
         QHeaderView::section { background: @{surface-300}; color: @{ink-muted}; border: none;
             border-bottom: 1px solid @{line}; padding: 8px; font-weight: 600; }
         QTableCornerButton::section { background: @{surface-300}; border: none; }
@@ -252,6 +252,11 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
         /* Selo "AGORA"/"PRÓXIMA" do painel Hoje (a 2ª regra vence a de "QFrame#card QLabel") */
         QLabel#badge, QFrame#card QLabel#badge { background: @{primary}; color: @{on-primary}; border-radius: 6px;
             padding: 3px 10px; font-size: 12px; font-weight: 700; }
+        /* Selos do cartão "Alunos em atenção": o nível vem escrito no texto; a cor só reforça */
+        QLabel#seloCritico, QFrame#card QLabel#seloCritico { background: transparent; color: @{danger}; border: 1px solid @{danger};
+            border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
+        QLabel#seloAtencao, QFrame#card QLabel#seloAtencao { background: transparent; color: @{warning}; border: 1px solid @{warning};
+            border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
         QScrollArea { background: transparent; border: none; }
         QScrollArea > QWidget > QWidget { background: transparent; }
 

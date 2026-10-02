@@ -16,6 +16,7 @@ class AnotacaoRepository;
 class FrequenciaRepository;
 class EventoRepository;
 class BuscaRepository;
+class OcorrenciaRepository;
 
 struct Repositorios {
     TurmaRepository &turmas;
@@ -31,4 +32,5 @@ struct Repositorios {
     FrequenciaRepository &frequencia;
     EventoRepository &eventos;
     BuscaRepository &busca;
+    OcorrenciaRepository &ocorrencias;
 };

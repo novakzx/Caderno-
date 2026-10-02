@@ -11,6 +11,7 @@ class AulasPage;
 class BarraDeTitulo;
 class BotaoNav;
 class CalendarioPage;
+class GerenteDeLembretes;
 class PilhaAnimada;
 class QButtonGroup;
 class QLabel;
@@ -53,6 +54,8 @@ private:
     void abrirBusca();
     void navegarPara(const ItemBusca &item);
     void abrirBackup();
+    void abrirLembretes();
+    void trazerParaFrente();
     void verificarBackupAutomatico(int intervaloHoras);
 
     // Redimensionar pelas bordas (a janela não tem moldura): detecta a borda sob o mouse.
@@ -69,6 +72,7 @@ private:
     QLabel *m_titulo = nullptr;
     QList<BotaoNav *> m_botoesNav;  // para recolorir os ícones quando o tema muda
     QTimer *m_timerBackup = nullptr;
+    GerenteDeLembretes *m_lembretes = nullptr;
     bool m_cursorDeBorda = false;
 
     // Páginas que recebem navegação vinda da busca global e de outras telas.

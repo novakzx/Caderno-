@@ -1,7 +1,9 @@
 #include "ui/HojePage.h"
 #include "ui/ThemeManager.h"
 
+#include "core/AtencaoUtil.h"
 #include "database/AgendaRepository.h"
+#include "database/Repositorios.h"
 #include "database/TarefaRepository.h"
 
 #include <QCheckBox>
@@ -14,13 +16,16 @@
 #include <QLineEdit>
 #include <QLocale>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QScrollArea>
+#include <QSettings>
 #include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
 
-constexpr int kDiasProvas = 14;  // janela de "provas próximas"
+constexpr int kDiasProvas = 14;      // janela de "provas próximas"
+constexpr int kMaximoDeAlunos = 6;   // quantos alunos o cartão "em atenção" mostra de uma vez
 
 const QLocale &ptBR()
 {
@@ -96,10 +101,47 @@ QString textoRelativo(int dias)
     return QStringLiteral("atrasada há %1 dias").arg(-dias);
 }
 
+// 5,9 · 74,96 · 80 (duas casas, sem zeros sobrando)
+QString numeroCurto(double v)
+{
+    QString s = QString::number(v, 'f', 2);
+    while (s.endsWith(QLatin1Char('0')))
+        s.chop(1);
+    if (s.endsWith(QLatin1Char('.')))
+        s.chop(1);
+    return s.replace(QLatin1Char('.'), QLatin1Char(','));
+}
+
+// "Média abaixo da nota de corte (5,5) · Frequência abaixo de 75% (70%)"
+QString textoDosMotivos(const AlunoEmAtencao &a)
+{
+    QStringList partes;
+    for (const AtencaoUtil::Motivo m : a.motivos) {
+        QString texto = QString::fromUtf8(AtencaoUtil::rotulo(m));
+        switch (m) {
+        case AtencaoUtil::Motivo::MediaAbaixo:
+        case AtencaoUtil::Motivo::MediaPerto:
+            if (a.media)
+                texto += QStringLiteral(" (%1)").arg(numeroCurto(*a.media));
+            break;
+        case AtencaoUtil::Motivo::FrequenciaAbaixo:
+        case AtencaoUtil::Motivo::FrequenciaPerto:
+            if (a.frequenciaPct)
+                texto += QStringLiteral(" (%1%)").arg(numeroCurto(*a.frequenciaPct));
+            break;
+        case AtencaoUtil::Motivo::Ocorrencias:
+            texto += QStringLiteral(" (%1 em %2 dias)").arg(a.ocorrenciasNegativas).arg(AtencaoUtil::Limites().diasDeOcorrencias);
+            break;
+        }
+        partes << texto;
+    }
+    return partes.join(QStringLiteral(" · "));
+}
+
 }  // namespace
 
-HojePage::HojePage(AgendaRepository &agenda, TarefaRepository &tarefas, QWidget *parent)
-    : QWidget(parent), m_agenda(agenda), m_tarefas(tarefas)
+HojePage::HojePage(Repositorios &repos, QWidget *parent)
+    : QWidget(parent), m_agenda(repos.agenda), m_tarefas(repos.tarefas), m_desempenho(repos)
 {
     auto *externo = new QVBoxLayout(this);
     externo->setContentsMargins(0, 0, 0, 0);
@@ -123,11 +165,11 @@ HojePage::HojePage(AgendaRepository &agenda, TarefaRepository &tarefas, QWidget 
     raiz->addWidget(m_resumo);
     raiz->addSpacing(14);
 
-    // Três cartões: aulas (esquerda, mais largo) | tarefas e provas (direita)
+    // Quatro cartões: aulas | tarefas  /  alunos em atenção | provas  (coluna da esquerda mais larga)
     auto *grade = new QGridLayout;
     grade->setHorizontalSpacing(16);
     grade->setVerticalSpacing(16);
-    grade->addWidget(criarCartao(QStringLiteral("aulas"), QStringLiteral("Aulas de hoje"), &m_listaAulas), 0, 0, 2, 1);
+    grade->addWidget(criarCartao(QStringLiteral("aulas"), QStringLiteral("Aulas de hoje"), &m_listaAulas), 0, 0);
 
     QFrame *cartaoTarefas = criarCartao(QStringLiteral("tarefa-ok"), QStringLiteral("Tarefas pendentes"), &m_listaTarefas);
     m_novaTarefa = new QLineEdit;
@@ -136,6 +178,7 @@ HojePage::HojePage(AgendaRepository &agenda, TarefaRepository &tarefas, QWidget 
     cartaoTarefas->layout()->addWidget(m_novaTarefa);
     grade->addWidget(cartaoTarefas, 0, 1);
 
+    grade->addWidget(criarCartao(QStringLiteral("alerta"), QStringLiteral("Alunos em atenção"), &m_listaAtencao), 1, 0);
     grade->addWidget(criarCartao(QStringLiteral("anotacoes"), QStringLiteral("Provas próximas"), &m_listaProvas), 1, 1);
     grade->setColumnStretch(0, 3);
     grade->setColumnStretch(1, 2);
@@ -172,10 +215,11 @@ void HojePage::atualizar()
 
     m_data->setText(primeiraMaiuscula(ptBR().toString(hoje, QStringLiteral("dddd, d 'de' MMMM"))));
 
-    int aulas = 0, tarefas = 0, provas = 0;
+    int aulas = 0, tarefas = 0, provas = 0, atencao = 0;
     atualizarAulas(hoje, agora, &aulas);
     atualizarTarefas(hoje, &tarefas);
     atualizarProvas(hoje, &provas);
+    atualizarAtencao(&atencao);
 
     m_resumo->setText(QStringLiteral("%1 · %2 · %3")
                           .arg(aulas == 1 ? QStringLiteral("1 aula") : QStringLiteral("%1 aulas").arg(aulas),
@@ -183,6 +227,9 @@ void HojePage::atualizar()
                                             : QStringLiteral("%1 tarefas pendentes").arg(tarefas),
                                provas == 1 ? QStringLiteral("1 prova nos próximos %1 dias").arg(kDiasProvas)
                                            : QStringLiteral("%1 provas nos próximos %2 dias").arg(provas).arg(kDiasProvas)));
+    if (atencao > 0)
+        m_resumo->setText(m_resumo->text() + (atencao == 1 ? QStringLiteral(" · 1 aluno em atenção")
+                                                          : QStringLiteral(" · %1 alunos em atenção").arg(atencao)));
 }
 
 // ============================================================================
@@ -325,6 +372,57 @@ void HojePage::atualizarProvas(const QDate &hoje, int *total)
         linha->setWordWrap(true);
         m_listaProvas->addWidget(linha);
     }
+}
+
+void HojePage::atualizarAtencao(int *total)
+{
+    esvaziar(m_listaAtencao);
+    // A nota de corte é a mesma da tela de Notas (o professor a ajusta lá).
+    const double corte = QSettings().value(QStringLiteral("notaCorte"), 6.0).toDouble();
+    const QList<AlunoEmAtencao> alunos = m_desempenho.alunosEmAtencao(corte, QDate::currentDate());
+    *total = alunos.size();
+
+    if (alunos.isEmpty()) {
+        m_listaAtencao->addWidget(textoMudo(QStringLiteral("Nenhum aluno em atenção. Médias e frequência estão em dia.")));
+        return;
+    }
+
+    const int mostrar = qMin<int>(alunos.size(), kMaximoDeAlunos);
+    for (int i = 0; i < mostrar; ++i) {
+        const AlunoEmAtencao &a = alunos.at(i);
+        const bool critico = a.nivel == AtencaoUtil::Nivel::Critico;
+
+        auto *linha = new QWidget;
+        auto *vl = new QVBoxLayout(linha);
+        vl->setContentsMargins(0, 0, 0, 0);
+        vl->setSpacing(1);
+
+        auto *topo = new QHBoxLayout;
+        topo->setSpacing(8);
+        // "&" num botão vira atalho de teclado: nomes como "Ana & Bia" precisam dele dobrado.
+        auto *botao = new QPushButton(QString(a.nome).replace(QLatin1Char('&'), QStringLiteral("&&")));
+        botao->setObjectName(QStringLiteral("link"));
+        botao->setCursor(Qt::PointingHandCursor);
+        botao->setToolTip(QStringLiteral("Abrir %1 na turma").arg(a.turmaNome));
+        const int turmaId = a.turmaId;
+        const int alunoId = a.alunoId;
+        connect(botao, &QPushButton::clicked, this, [this, turmaId, alunoId] { emit abrirAlunoSolicitado(turmaId, alunoId); });
+        topo->addWidget(botao);
+        topo->addWidget(textoMudo(a.turmaNome));
+        topo->addStretch(1);
+        // O nível é dito em palavras (e a cor só reforça).
+        auto *selo = new QLabel(critico ? QStringLiteral("Urgente") : QStringLiteral("Atenção"));
+        selo->setObjectName(critico ? QStringLiteral("seloCritico") : QStringLiteral("seloAtencao"));
+        topo->addWidget(selo, 0, Qt::AlignVCenter);
+        vl->addLayout(topo);
+
+        auto *detalhe = textoMudo(textoDosMotivos(a));
+        detalhe->setContentsMargins(6, 0, 0, 0);
+        vl->addWidget(detalhe);
+        m_listaAtencao->addWidget(linha);
+    }
+    if (alunos.size() > mostrar)
+        m_listaAtencao->addWidget(textoMudo(QStringLiteral("e mais %1 aluno(s)…").arg(alunos.size() - mostrar)));
 }
 
 void HojePage::criarTarefaRapida()

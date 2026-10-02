@@ -10,6 +10,8 @@
 #include <QSet>
 #include <QVariant>
 
+#include <cmath>
+
 #include <xlsxdocument.h>
 #include <xlsxformat.h>
 #include <xlsxrichstring.h>
@@ -298,6 +300,58 @@ std::optional<Planilha> importar(const QString &caminho, QString *erro)
         return falha(QStringLiteral("Não encontrei nenhuma coluna de nota na planilha."));
 
     return planilha;
+}
+
+std::optional<QList<QStringList>> lerTabela(const QString &caminho, QString *erro)
+{
+    auto falha = [erro](const QString &msg) -> std::optional<QList<QStringList>> {
+        if (erro)
+            *erro = msg;
+        return std::nullopt;
+    };
+
+    constexpr qint64 kTamanhoMaximo = 25LL * 1024 * 1024;
+    if (QFileInfo(caminho).size() > kTamanhoMaximo)
+        return falha(QStringLiteral("O arquivo é grande demais (máximo de 25 MB)."));
+
+    QXlsx::Document doc(caminho);
+    if (!doc.load())
+        return falha(QStringLiteral("Não foi possível abrir o arquivo. Verifique se é um .xlsx válido "
+                                    "e se não está protegido por senha."));
+
+    const QXlsx::CellRange dim = doc.dimension();
+    if (!dim.isValid())
+        return falha(QStringLiteral("A planilha está vazia."));
+    if (dim.lastRow() > 5000 || dim.lastColumn() > 200)
+        return falha(QStringLiteral("A planilha é grande demais (máximo de 5.000 linhas e 200 colunas)."));
+
+    QList<QStringList> tabela;
+    for (int linha = 1; linha <= dim.lastRow(); ++linha) {
+        QStringList celulas;
+        bool temConteudo = false;
+        for (int coluna = 1; coluna <= dim.lastColumn(); ++coluna) {
+            const QVariant v = doc.read(linha, coluna);
+            QString texto;
+            switch (v.typeId()) {
+            case QMetaType::QDateTime: texto = v.toDateTime().date().toString(Qt::ISODate); break;
+            case QMetaType::QDate: texto = v.toDate().toString(Qt::ISODate); break;
+            case QMetaType::Double:
+            case QMetaType::Float: {
+                const double d = v.toDouble();
+                texto = (d == std::floor(d) && std::fabs(d) < 1e15) ? QString::number(d, 'f', 0) : QString::number(d, 'g', 15);
+                break;
+            }
+            default: texto = v.toString().trimmed(); break;
+            }
+            temConteudo = temConteudo || !texto.isEmpty();
+            celulas << texto;
+        }
+        if (temConteudo)
+            tabela.append(celulas);
+    }
+    if (tabela.isEmpty())
+        return falha(QStringLiteral("A planilha está vazia."));
+    return tabela;
 }
 
 }  // namespace XlsxService

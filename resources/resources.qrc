@@ -47,6 +47,7 @@
         <file alias="marca.svg">icons/marca.svg</file>
         <file alias="caderno-mark.svg">icons/caderno-mark.svg</file>
         <file alias="limpar.svg">icons/limpar.svg</file>
+        <file alias="sino.svg">icons/sino.svg</file>
     </qresource>
     <qresource prefix="/fonts">
         <file alias="Figtree-Regular.ttf">fonts/Figtree-Regular.ttf</file>

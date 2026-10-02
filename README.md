@@ -5,8 +5,8 @@ Tudo offline: os dados ficam num único arquivo SQLite no computador.
 
 | Seção | O que faz |
 |---|---|
-| 🏠 Hoje | Aulas do dia (com AGORA/PRÓXIMA), tarefas pendentes, provas dos próximos 14 dias |
-| 👥 Turmas | Turmas e alunos; abas **Arquivos** (apresentações/documentos) e **Anotações** da turma |
+| 🏠 Hoje | Aulas do dia (com AGORA/PRÓXIMA), tarefas pendentes, **alunos em atenção**, provas dos próximos 14 dias |
+| 👥 Turmas | Turmas e alunos; **importar lista (CSV/Excel/colar)**, **ocorrências** por aluno; abas **Arquivos** e **Anotações** da turma |
 | 📊 Notas | Planilha editável, média ponderada automática, importar/exportar Excel |
 | 📋 Frequência | Chamada do dia (P/F/J/A) e resumo do mês em grade |
 | 🗓️ Horário | Grade semanal com cores por turma, arrastar e soltar |
@@ -17,6 +17,7 @@ Tudo offline: os dados ficam num único arquivo SQLite no computador.
 | 📈 Relatórios | Gráficos de desempenho e PDFs (boletim, frequência, ficha do aluno) |
 | 🔍 Busca (Ctrl+K) | Procura em tudo, ignorando acentos e maiúsculas |
 | 💾 Backup | Automático a cada 24 h; salvar cópia; restaurar |
+| 🔔 Lembretes | Notificações do Windows: aula prestes a começar, tarefas e provas de hoje/amanhã |
 
 ## Compilar e rodar no Windows com Qt Creator
 
@@ -49,15 +50,23 @@ testes e gera uma pasta pronta para usar. Passo a passo:
    ```
 2. No GitHub, abra a aba **Actions** → **Build Windows**. O build roda sozinho (leva ~10–15 min na primeira vez).
 3. Se der **erro de compilação**, abra o passo "Compilar", copie as linhas com `error` e me mande.
-4. Se der certo, role até **Artifacts** no fim da página da execução e baixe **ProfOrganizer-build-N-xxxxxxx** (N = número da execução, xxxxxxx = início do commit; o mesmo código aparece na barra de título do app).
-5. Descompacte o `.zip` em qualquer pasta e execute `ProfOrganizer.exe` (não precisa instalar o Qt).
+4. Se der certo, role até **Artifacts** no fim da página da execução. Há dois: **Instalador-build-N-xxxxxxx** (o `Caderno-Setup-...exe`, um
+   `.zip` portátil e o `SHA256SUMS.txt`) e **ProfOrganizer-build-N-xxxxxxx** (só a pasta do programa). N = número da execução,
+   xxxxxxx = início do commit; o mesmo código aparece na barra de título do app.
+5. Para instalar: descompacte o artefato do instalador e execute `Caderno-Setup-...exe` (não pede administrador, cria atalho no Menu Iniciar
+   e não apaga seus dados ao desinstalar). Ou use o `.zip` portátil: descompacte e execute `ProfOrganizer.exe` (não precisa instalar o Qt).
+
+**Lançar uma versão (Release pública):** aumente `VERSION` em `CMakeLists.txt` (é a única fonte do número), faça commit e crie uma etiqueta
+`vX.Y.Z` igual a essa versão (`git tag v1.1.0 && git push origin v1.1.0`). O workflow cria a Release no GitHub com o instalador, o `.zip` e os hashes.
+Detalhes e o aviso do SmartScreen em `docs/GUIA-PUBLICAR.md`.
 
 ### Testes
 ```
 ctest --test-dir build --output-on-failure
 ```
-Três testes sem Qt: `test_media` (média ponderada), `test_horario` (contas da grade) e
-`test_frequencia` (percentual de frequência). No Qt Creator: Build → Run CTest.
+Oito testes sem Qt: `test_media`, `test_horario`, `test_frequencia`, `test_contraste`, `test_conta`, `test_atencao` (alunos em atenção e tipos
+de ocorrência), `test_lembrete` (quando avisar) e `test_csv` (leitor de CSV). O autoteste (`ProfOrganizer.exe --selftest relatorio.txt`) exercita
+também o banco, as migrações, os repositórios, as contas, a importação e os lembretes. No Qt Creator: Build → Run CTest.
 
 ### Distribuir para outro PC (opcional)
 Em *Qt 6.x (MinGW) Command Prompt*, dentro da pasta do `.exe` de Release: `windeployqt ProfOrganizer.exe`
@@ -87,6 +96,25 @@ Cada plano de aula aceita anexos (PowerPoint, PDF, etc.) que abrem no **programa
 guarda só o **caminho** do arquivo: se você mover ou apagar o original, o anexo aparece como "não encontrado".
 Por segurança, executáveis e scripts (`.exe`, `.bat`, `.js`…) não são anexados nem abertos.
 
+### Alunos em atenção e ocorrências
+- O painel **Hoje** lista os alunos que pedem atenção. **Urgente**: média abaixo da nota de corte (a mesma da tela de Notas) ou frequência
+  abaixo de 75%. **Atenção**: média até 0,5 acima do corte, frequência até 5 pontos acima de 75%, ou 2+ ocorrências negativas (conduta,
+  dificuldade) nos últimos 30 dias. Sem notas ou sem chamadas registradas, não há alerta. Clique no nome para abrir o aluno na turma.
+- Em **Turmas → Alunos → Ocorrências…** registre elogio, conduta, dificuldade de aprendizagem, contato com a família ou outro, com data e descrição.
+  A tabela mostra quantas cada aluno tem, e a **ficha em PDF** inclui a lista.
+- Novos tipos de ocorrência: acrescente uma linha em `src/core/OcorrenciaUtil.h` (não precisa de migração).
+
+### Importar alunos
+**Turmas → Importar lista…** aceita `.csv`, `.txt`, `.xlsx` ou texto colado (por exemplo, copiado do Excel). A primeira linha traz os títulos:
+**Nome** (obrigatório), Matrícula, E-mail, Nascimento (aceita "Aluno", "RA", "Data de nascimento"...). Uma lista de uma coluna só, sem títulos, vale como
+lista de nomes. Use **Baixar modelo** para ver o formato. Você vê tudo antes de gravar: quem já está na turma (mesma matrícula, ou mesmo nome sem matrícula)
+e as linhas repetidas ou inválidas são ignoradas; e-mail ou data inválidos viram aviso. Limites: 5 MB (texto) e 5.000 linhas.
+
+### Lembretes
+O botão **Lembretes** (barra lateral) liga as notificações do Windows: aula prestes a começar (5 a 30 min antes, ou desligado), tarefas e provas de hoje e de
+amanhã (a partir das 8h; tarefa atrasada não avisa, ela já aparece em vermelho no Hoje). Cada aviso aparece uma vez por dia. **Só funciona com o Caderno+
+aberto**; o ícone na área de notificação abre o programa. Se nada aparecer, veja o "Assistente de foco" do Windows (há um botão de teste).
+
 ### Anotações
 Formatação (negrito, itálico, sublinhado, marca-texto, listas), tags separadas por vírgula e vínculo opcional com
 turma, aluno e aula. Salva sozinha ~1 s depois de parar de digitar e ao trocar de anotação ou de tela.
@@ -104,15 +132,15 @@ Gráficos: média por aluno, média por avaliação, distribuição das médias,
 - Dica: use "Salvar uma cópia em…" para guardar backups em pen drive ou pasta sincronizada na nuvem.
 
 ## Arquitetura
-- `src/core`     — lógica pura sem Qt (média, frequência, horário, texto, anexos), testável
+- `src/core`     — lógica pura sem Qt (média, frequência, horário, texto, anexos, atenção, ocorrências, lembretes, CSV), testável
 - `src/models`   — structs de dados
 - `src/database` — conexão, migrações versionadas e repositórios (**único lugar com SQL**); `Repositorios.h` agrupa todos
-- `src/services` — `.xlsx`, PDF, backup, importação de notas, agregação de desempenho
+- `src/services` — `.xlsx`, PDF, backup, importação de notas e de alunos, agregação de desempenho, lembretes
 - `src/ui`       — widgets; recebem os repositórios por injeção (`main.cpp` → `MainWindow` → telas)
 
 ### Evoluir o esquema
 Adicione uma nova `Migracao` (versao + 1) no fim de `Migrations::todas()` em `src/database/Migrations.cpp`
-(as versões 2, 3 e 4 são exemplos). Nunca edite migrações já distribuídas. Um backup feito por uma versão mais nova
+(as versões 2 a 6 são exemplos). Nunca edite migrações já distribuídas. Um backup feito por uma versão mais nova
 do programa é recusado na restauração.
 
 ## Atalhos

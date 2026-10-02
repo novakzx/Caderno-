@@ -6,55 +6,41 @@ abre em qualquer aparelho**, isso é outro produto (veja o item 6).
 
 ## 1. Distribuir o programa (o caminho mais simples)
 
-### 1.1 GitHub Releases (grátis)
+### 1.1 Lançar uma versão (já automatizado)
 
-Hoje cada `push` gera um pacote como "artefato" (some em 90 dias e exige login no GitHub para baixar). O próximo passo
-é publicar uma **Release**, com link público e permanente:
+Todo `push` gera, além da pasta do programa, o **instalador** (`Caderno-Setup-<versão>.exe`), um `.zip` portátil e o
+`SHA256SUMS.txt` (artefato **Instalador-build-N-xxxxxxx**, na página da execução em Actions). Quando o push é uma
+**etiqueta `vX.Y.Z`**, o workflow também publica uma **Release** no GitHub com esses três arquivos, com link público e permanente.
 
-1. Aumente a versão em `CMakeLists.txt` (`project(... VERSION 1.1.0)`) e em `src/main.cpp` (`setApplicationVersion`).
-2. Crie uma etiqueta e envie:
+Para lançar a versão 1.2.0, por exemplo:
+
+1. Aumente `VERSION` em `CMakeLists.txt` (`project(ProfOrganizer VERSION 1.2.0 ...)`). É a **única fonte** do número: ele vai para
+   a barra de título, a tela de login e o instalador.
+2. Faça commit e envie. Espere o build ficar verde (compila, roda `ctest` e o autoteste).
+3. Crie a etiqueta **igual à versão** e envie:
    ```bash
-   git tag v1.1.0
-   git push origin v1.1.0
+   git tag v1.2.0
+   git push origin v1.2.0
    ```
-3. Em **Releases → Draft a new release**, escolha a etiqueta, escreva o que mudou e anexe o `.zip` do pacote.
+4. Em alguns minutos aparece em **Releases** (lateral direita da página do repositório). Os textos da Release são gerados a partir dos commits;
+   você pode editá-los depois no GitHub.
 
-Dá para automatizar: um job que roda quando aparece uma etiqueta `v*`, compacta `dist/ProfOrganizer` e cria a Release com
-`gh release create` (permissão `contents: write` só nesse job). Posso configurar isso quando você quiser.
+O workflow **recusa** a etiqueta se o formato não for `vX.Y.Z` ou se o número não bater com o `CMakeLists.txt` (para não publicar um
+instalador com a versão errada). A permissão de escrita (`contents: write`) existe só no job que cria a Release.
 
-### 1.2 Instalador de verdade (recomendado para professores)
+> Esta parte foi escrita e revisada, mas a primeira etiqueta real é o teste final: depois de criá-la, confira em Actions que o job
+> "Publicar a Release" ficou verde e baixe o instalador **num computador limpo** antes de divulgar.
 
-Um `.zip` pede para extrair e achar o `.exe`. Um instalador cria atalho no Menu Iniciar, tem desinstalador e instala
-sem precisar de administrador. A ferramenta gratuita é o **Inno Setup**. Modelo mínimo (`installer/Caderno.iss`):
+### 1.2 O instalador (Inno Setup)
 
-```ini
-[Setup]
-AppName=Caderno+
-AppVersion=1.1.0
-DefaultDirName={autopf}\Caderno+
-PrivilegesRequired=lowest
-OutputBaseFilename=Caderno-Setup-1.1.0
-Compression=lzma2
-SolidCompression=yes
-SetupIconFile=..\resources\icons\app.ico
+O script é `installer/Caderno.iss`. O instalador:
 
-[Files]
-Source: "..\dist\ProfOrganizer\*"; DestDir: "{app}"; Flags: recursesubdirs
+- instala **só para o usuário atual** (sem pedir administrador), em `%LOCALAPPDATA%\Programs\Caderno+`;
+- cria o atalho no Menu Iniciar (e, se a pessoa marcar, na área de trabalho) e o desinstalador;
+- **atualiza por cima** de uma versão anterior (o `AppId` é fixo: não o altere) e pede para fechar o Caderno+ se estiver aberto;
+- **não apaga os dados** (`%APPDATA%\ProfOrganizer`) ao desinstalar; avisa onde eles ficam.
 
-[Icons]
-Name: "{autoprograms}\Caderno+"; Filename: "{app}\ProfOrganizer.exe"
-Name: "{autodesktop}\Caderno+"; Filename: "{app}\ProfOrganizer.exe"; Tasks: desktopicon
-
-[Tasks]
-Name: "desktopicon"; Description: "Criar atalho na área de trabalho"
-
-[Run]
-Filename: "{app}\ProfOrganizer.exe"; Description: "Abrir o Caderno+"; Flags: postinstall nowait
-```
-
-O instalador **não** apaga os dados do usuário ao desinstalar (ficam em `%APPDATA%\ProfOrganizer`), o que é o desejado.
-Nos executores do GitHub o Inno Setup já vem instalado (`iscc installer\Caderno.iss`). Este modelo não foi testado neste
-projeto; teste num computador limpo antes de distribuir.
+Para gerar localmente (com o Inno Setup 6 instalado e a pasta `dist\ProfOrganizer` pronta): `iscc /DVersao=1.2.0 installer\Caderno.iss`.
 
 ### 1.3 O aviso azul do Windows (SmartScreen)
 
@@ -63,7 +49,8 @@ Programas sem assinatura mostram "O Windows protegeu o seu computador". Opções
 - **Assinatura de código**: certificado pago (OV/EV) ou o serviço **Azure Trusted Signing**. É a solução definitiva.
 - **Microsoft Store (MSIX)**: conta de desenvolvedor individual com taxa única; a loja assina o pacote.
 - **Reputação**: o aviso diminui com o tempo e o número de downloads; até lá, oriente: "Mais informações → Executar assim mesmo".
-- Sempre publique o **hash SHA-256** do arquivo para quem quiser conferir (`Get-FileHash arquivo.zip`).
+- O **hash SHA-256** de cada arquivo já vai na Release (`SHA256SUMS.txt`); quem quiser conferir roda `Get-FileHash Caderno-Setup-1.2.0.exe`
+  e compara com o valor do arquivo.
 
 ## 2. Uma página para divulgar
 

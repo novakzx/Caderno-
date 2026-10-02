@@ -17,6 +17,7 @@
 #include "database/HorarioRepository.h"
 #include "database/Migrations.h"
 #include "database/NotaRepository.h"
+#include "database/OcorrenciaRepository.h"
 #include "database/Repositorios.h"
 #include "database/SqlUtil.h"
 #include "database/TarefaRepository.h"
@@ -24,6 +25,8 @@
 #include "services/BackupService.h"
 #include "services/ContaService.h"
 #include "services/DesempenhoService.h"
+#include "services/ImportadorAlunos.h"
+#include "services/LembreteService.h"
 #include "services/XlsxService.h"
 #include "services/RelatorioPdf.h"
 
@@ -39,8 +42,11 @@
 #include <QTemporaryDir>
 #include <QUuid>
 
+#include <algorithm>
+
 #include <xlsxcell.h>
 #include <xlsxdocument.h>
+#include <xlsxformat.h>
 
 namespace AutoTeste {
 
@@ -208,8 +214,9 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     FrequenciaRepository frequencia;
     EventoRepository eventos;
     BuscaRepository busca;
+    OcorrenciaRepository ocorrencias;
     Repositorios repos{turmas, alunos, avaliacoes, notas, horarios, tarefas, agenda,
-                       aulas, anexos, anotacoes, frequencia, eventos, busca};
+                       aulas, anexos, anotacoes, frequencia, eventos, busca, ocorrencias};
 
     // --- Turmas e alunos ---
     Turma t;
@@ -341,6 +348,57 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
                     anotacoes.atualizar(editada) && anotacoes.listarTags().size() == 1, anotacoes.ultimoErro());
     }
 
+    // --- Lembretes (segunda, 05/10/2026: há aula às 07:30) ---
+    {
+        LembreteService lembretes(agenda, tarefas);
+        LembreteUtil::Config cfg;  // padrão: 10 min antes, prazos ligados
+        const QDate segunda(2026, 10, 5);
+        r.verificar(QStringLiteral("LembreteService: 07:25 avisa da aula das 07:30 (faltam 5 min)"),
+                    [&] {
+                        const auto l = lembretes.pendentes(QDateTime(segunda, QTime(7, 25)), cfg);
+                        return l.size() == 1 && l.first().titulo == QStringLiteral("Aula em 5 minutos") &&
+                               l.first().chave.startsWith(QStringLiteral("aula:")) && l.first().texto.contains(QStringLiteral("8º A"));
+                    }());
+        r.verificar(QStringLiteral("LembreteService: 07:10 (cedo) e 07:30 (já começou) não avisam"),
+                    lembretes.pendentes(QDateTime(segunda, QTime(7, 10)), cfg).isEmpty() &&
+                        lembretes.pendentes(QDateTime(segunda, QTime(7, 30)), cfg).isEmpty());
+        LembreteUtil::Config desligado = cfg;
+        desligado.ativos = false;
+        LembreteUtil::Config semAulas = cfg;
+        semAulas.antecedenciaAula = 0;
+        r.verificar(QStringLiteral("LembreteService: desligado ou sem aulas não avisa"),
+                    lembretes.pendentes(QDateTime(segunda, QTime(7, 25)), desligado).isEmpty() &&
+                        lembretes.pendentes(QDateTime(segunda, QTime(7, 25)), semAulas).isEmpty());
+
+        // Tarefa e prova para amanhã (06/10): só avisam a partir das 8h.
+        Tarefa amanha;
+        amanha.titulo = QStringLiteral("Entregar notas");
+        amanha.dataEntrega = QDate(2026, 10, 6);
+        const int amanhaId = tarefas.inserir(amanha);
+        Evento provaAmanha;
+        provaAmanha.titulo = QStringLiteral("Prova de Ciências");
+        provaAmanha.tipo = QStringLiteral("prova");
+        provaAmanha.dataInicio = QDate(2026, 10, 6);
+        const int provaAmanhaId = eventos.inserir(provaAmanha);
+        r.verificar(QStringLiteral("LembreteService: tarefa e prova de amanhã não avisam de madrugada (07:25)"),
+                    lembretes.pendentes(QDateTime(segunda, QTime(7, 25)), cfg).size() == 1);  // só a aula
+        const auto as9 = lembretes.pendentes(QDateTime(segunda, QTime(9, 0)), cfg);
+        r.verificar(QStringLiteral("LembreteService: às 9h avisa da tarefa e da prova de amanhã (e não da tarefa já concluída)"),
+                    as9.size() == 2 && as9.first().chave != as9.last().chave, QString::number(as9.size()));
+        LembreteUtil::Config semPrazos = cfg;
+        semPrazos.prazos = false;
+        r.verificar(QStringLiteral("LembreteService: com prazos desligados não avisa de tarefa nem prova"),
+                    lembretes.pendentes(QDateTime(segunda, QTime(9, 0)), semPrazos).isEmpty());
+        r.verificar(QStringLiteral("LembreteService: tarefa atrasada não avisa (dia 07/10)"),
+                    lembretes.pendentes(QDateTime(QDate(2026, 10, 7), QTime(9, 0)), cfg).isEmpty());
+        // A chave muda de um dia para o outro (o aviso de "hoje" é novo, não repete o de "amanhã").
+        const auto noDia = lembretes.pendentes(QDateTime(QDate(2026, 10, 6), QTime(9, 0)), cfg);
+        r.verificar(QStringLiteral("LembreteService: no próprio dia avisa de novo, com outra chave"),
+                    noDia.size() == 2 && !as9.isEmpty() && noDia.first().chave != as9.first().chave && noDia.first().titulo.contains(QStringLiteral("hoje")));
+        tarefas.remover(amanhaId);
+        eventos.remover(provaAmanhaId);
+    }
+
     // --- Frequência ---
     const QDate dia(2026, 10, 5);
     r.verificar(QStringLiteral("FrequenciaRepository::salvar (presente)"), frequencia.salvar(alunoId, dia, QLatin1Char('P')), frequencia.ultimoErro());
@@ -353,6 +411,39 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
                 frequencia.doDia(turmaId, dia).size() == 1 && frequencia.doMes(turmaId, 2026, 10).size() == 2, frequencia.ultimoErro());
     r.verificar(QStringLiteral("FrequenciaRepository::marcarRestantes"), frequencia.marcarRestantes(turmaId, dia, QLatin1Char('P')), frequencia.ultimoErro());
 
+    // --- Ocorrências por aluno ---
+    Ocorrencia oc;
+    oc.alunoId = alunoId;
+    oc.data = QDate::currentDate();
+    oc.tipo = QStringLiteral("conduta");
+    oc.texto = QStringLiteral("Conversou durante a prova <b>x</b>");  // HTML digitado pelo usuário: nunca pode virar HTML
+    const int ocId = ocorrencias.inserir(oc);
+    r.verificar(QStringLiteral("OcorrenciaRepository::inserir"), ocId > 0, ocorrencias.ultimoErro());
+    Ocorrencia oc2 = oc;
+    oc2.data = QDate::currentDate().addDays(-3);
+    oc2.tipo = QStringLiteral("tipo-que-nao-existe");
+    oc2.texto = QStringLiteral("Anotação antiga");
+    const int oc2Id = ocorrencias.inserir(oc2);
+    r.verificar(QStringLiteral("OcorrenciaRepository::inserir (tipo desconhecido vira \"outro\")"),
+                oc2Id > 0 && ocorrencias.buscar(oc2Id) && ocorrencias.buscar(oc2Id)->tipo == QStringLiteral("outro"), ocorrencias.ultimoErro());
+    const QList<Ocorrencia> daAluna = ocorrencias.listarPorAluno(alunoId);
+    r.verificar(QStringLiteral("OcorrenciaRepository::listarPorAluno (mais recentes primeiro)"),
+                daAluna.size() == 2 && daAluna.first().id == ocId && daAluna.first().texto == oc.texto, ocorrencias.ultimoErro());
+    Ocorrencia editada = daAluna.first();
+    editada.tipo = QStringLiteral("elogio");
+    r.verificar(QStringLiteral("OcorrenciaRepository::atualizar"),
+                ocorrencias.atualizar(editada) && ocorrencias.buscar(ocId)->tipo == QStringLiteral("elogio"), ocorrencias.ultimoErro());
+    r.verificar(QStringLiteral("contarNegativasPorAluno: elogio e \"outro\" não contam"),
+                ocorrencias.contarNegativasPorAluno(turmaId, QDate::currentDate().addDays(-30)).value(alunoId, 0) == 0);
+    editada.tipo = QStringLiteral("dificuldade");
+    ocorrencias.atualizar(editada);
+    r.verificar(QStringLiteral("contarNegativasPorAluno: conta só as negativas dentro do prazo"),
+                ocorrencias.contarNegativasPorAluno(turmaId, QDate::currentDate().addDays(-30)).value(alunoId, 0) == 1 &&
+                    ocorrencias.contarNegativasPorAluno(turmaId, QDate::currentDate().addDays(1)).isEmpty());
+    r.verificar(QStringLiteral("OcorrenciaRepository::contarPorAluno"), ocorrencias.contarPorAluno(turmaId).value(alunoId, 0) == 2);
+    r.verificar(QStringLiteral("OcorrenciaRepository::remover"),
+                ocorrencias.remover(oc2Id) && !ocorrencias.buscar(oc2Id) && ocorrencias.listarPorAluno(alunoId).size() == 1, ocorrencias.ultimoErro());
+
     // --- Busca global, desempenho, relatórios ---
     r.verificar(QStringLiteral("BuscaRepository::carregarIndice"), busca.carregarIndice().size() >= 8, busca.ultimoErro());
 
@@ -361,11 +452,29 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     r.verificar(QStringLiteral("DesempenhoService::boletim"), boletim && boletim->linhas.size() == 1 && boletim->linhas.first().media.has_value());
     const auto ficha = servico.ficha(alunoId);
     r.verificar(QStringLiteral("DesempenhoService::ficha"), ficha.has_value());
+    r.verificar(QStringLiteral("DesempenhoService::ficha traz as ocorrências registradas"), ficha && ficha->historico.size() == 1);
+
+    // Alunos em atenção: a aluna tem 1 falta em 2 chamadas (50% < 75%) e 1 ocorrência negativa recente.
+    const QList<AlunoEmAtencao> emAtencao = servico.alunosEmAtencao(6.0, QDate::currentDate());
+    r.verificar(QStringLiteral("DesempenhoService::alunosEmAtencao: frequência de 50% entra como urgente"),
+                emAtencao.size() == 1 && emAtencao.first().alunoId == alunoId &&
+                    emAtencao.first().nivel == AtencaoUtil::Nivel::Critico &&
+                    std::find(emAtencao.first().motivos.begin(), emAtencao.first().motivos.end(), AtencaoUtil::Motivo::FrequenciaAbaixo) !=
+                        emAtencao.first().motivos.end());
+    r.verificar(QStringLiteral("alunosEmAtencao: ocorrências recentes contam (1 só ainda não alerta)"),
+                emAtencao.size() == 1 && emAtencao.first().ocorrenciasNegativas == 1 &&
+                    std::find(emAtencao.first().motivos.begin(), emAtencao.first().motivos.end(), AtencaoUtil::Motivo::Ocorrencias) ==
+                        emAtencao.first().motivos.end());
     if (boletim && ficha) {
         r.verificar(QStringLiteral("RelatorioPdf::html* (boletim, frequência e ficha)"),
                     RelatorioPdf::htmlBoletim(*boletim, 6.0).contains(QStringLiteral("Ana Souza")) &&
                         RelatorioPdf::htmlFrequencia(*boletim).contains(QStringLiteral("Ana Souza")) &&
                         RelatorioPdf::htmlFicha(*ficha, 6.0).contains(QStringLiteral("Ana Souza")));
+        const QString htmlDaFicha = RelatorioPdf::htmlFicha(*ficha, 6.0);
+        r.verificar(QStringLiteral("ficha em PDF lista as ocorrências, com o texto do usuário escapado (sem HTML ativo)"),
+                    htmlDaFicha.contains(QStringLiteral("Ocorrências registradas")) &&
+                        htmlDaFicha.contains(QStringLiteral("Conversou durante a prova &lt;b&gt;x&lt;/b&gt;")) &&
+                        !htmlDaFicha.contains(QStringLiteral("<b>x</b>")));
     }
 
     // --- Backup ---
@@ -376,11 +485,104 @@ void testeDeFumaca(Relatorio &r, const QString &pasta)
     r.verificar(QStringLiteral("BackupService::validarArquivo recusa arquivo que não é banco"),
                 !BackupService::validarArquivo(pasta + QStringLiteral("/nao-existe.db"), &erro));
 
+    // --- Importação de alunos (CSV / lista colada) ---
+    {
+        ImportadorAlunos importador(alunos);
+        using S = LinhaImportacaoAluno::Situacao;
+        QString erroLista;
+
+        // Arquivo-modelo: Ana (já está na turma, mesma matrícula) e Bruno (novo).
+        const auto modelo = ImportadorAlunos::tabelaDeTexto(ImportadorAlunos::modeloCsv(), &erroLista);
+        const PlanoImportacaoAlunos planoModelo = modelo ? importador.planejar(turmaId, *modelo) : PlanoImportacaoAlunos();
+        r.verificar(QStringLiteral("ImportadorAlunos: o arquivo-modelo é lido (BOM, ';', acentos) e Ana já existe"),
+                    modelo && planoModelo.erro.isEmpty() && planoModelo.linhas.size() == 2 &&
+                        planoModelo.linhas.at(0).situacao == S::JaExiste && planoModelo.linhas.at(1).situacao == S::Nova &&
+                        planoModelo.linhas.at(1).aluno.dataNascimento == QDate(2011, 11, 2),
+                    erroLista + planoModelo.erro);
+
+        const QByteArray csv = QStringLiteral(
+                                   "Nome;Matrícula;E-mail;Nascimento\r\n"
+                                   "Ana Souza;2026001;;\r\n"
+                                   "Bruno Lima;2026002;bruno@escola.com;15/03/2012\r\n"
+                                   "\"Souza, Carla\";2026003;carla-sem-arroba;31/02/2012\r\n"
+                                   "Bruno Lima;2026002;;\r\n"
+                                   ";2026009;;\r\n"
+                                   "João da Silva;;;\r\n"
+                                   "joao da silva;;;\r\n"
+                                   "\"=HYPERLINK(\"\"http://x\"\")\";2026010;;\r\n")
+                                   .toUtf8();
+        const auto tabela = ImportadorAlunos::tabelaDeTexto(csv, &erroLista);
+        const PlanoImportacaoAlunos plano = tabela ? importador.planejar(turmaId, *tabela) : PlanoImportacaoAlunos();
+        r.verificar(QStringLiteral("ImportadorAlunos::planejar: 4 novos, 1 já existe, 2 repetidos, 1 inválido"),
+                    plano.erro.isEmpty() && plano.novos() == 4 && plano.total(S::JaExiste) == 1 &&
+                        plano.total(S::RepetidaNoArquivo) == 2 && plano.total(S::Invalida) == 1,
+                    erroLista + plano.erro);
+        r.verificar(QStringLiteral("ImportadorAlunos: e-mail e data inválidos viram aviso (a linha continua)"),
+                    plano.linhas.size() == 8 && plano.linhas.at(2).situacao == S::Nova && plano.linhas.at(2).aluno.nome == QStringLiteral("Souza, Carla") &&
+                        plano.linhas.at(2).aluno.email.isEmpty() && !plano.linhas.at(2).aluno.dataNascimento.isValid() &&
+                        plano.linhas.at(2).detalhe.contains(QStringLiteral("e-mail")) && plano.linhas.at(2).detalhe.contains(QStringLiteral("data")));
+
+        int criados = 0;
+        const bool gravou = importador.executar(turmaId, plano, &criados, &erroLista);
+        r.verificar(QStringLiteral("ImportadorAlunos::executar grava só os novos (transação única)"),
+                    gravou && criados == 4 && alunos.listarPorTurma(turmaId, QString(), true).size() == 5, erroLista);
+        QStringList nomes;
+        for (const Aluno &a : alunos.listarPorTurma(turmaId, QString(), true))
+            nomes << a.nome;
+        r.verificar(QStringLiteral("ImportadorAlunos: texto que parece fórmula entra como texto puro"),
+                    nomes.contains(QStringLiteral("=HYPERLINK(\"http://x\")")) && nomes.contains(QStringLiteral("João da Silva")));
+        r.verificar(QStringLiteral("ImportadorAlunos: importar de novo a mesma lista não duplica ninguém"),
+                    importador.planejar(turmaId, *tabela).novos() == 0);
+
+        // Lista de uma coluna, sem título; Windows-1252 ("João" em Latin-1); sem cabeçalho de verdade = erro claro.
+        const QByteArray latin1 = QByteArray("Maria Alves\nJo") + QByteArray::fromHex("E3") + QByteArray("o Perez\n");  // 0xE3 = "ã" em Windows-1252
+        const auto soNomes = ImportadorAlunos::tabelaDeTexto(latin1, &erroLista);
+        const PlanoImportacaoAlunos planoNomes = soNomes ? importador.planejar(turmaId, *soNomes) : PlanoImportacaoAlunos();
+        r.verificar(QStringLiteral("ImportadorAlunos: lista só de nomes (sem título) e arquivo em Windows-1252"),
+                    planoNomes.erro.isEmpty() && !planoNomes.temCabecalho && planoNomes.novos() == 2 &&
+                        planoNomes.linhas.at(1).aluno.nome == QStringLiteral("João Perez"),
+                    erroLista + planoNomes.erro);
+        const auto semTitulo = ImportadorAlunos::tabelaDeTexto(QByteArray("Ana;1\nBia;2\n"), &erroLista);
+        r.verificar(QStringLiteral("ImportadorAlunos: várias colunas sem títulos reconhecíveis = erro explicado"),
+                    semTitulo && !importador.planejar(turmaId, *semTitulo).erro.isEmpty());
+        const auto semNome = ImportadorAlunos::tabelaDeTexto(QByteArray("Matrícula;E-mail\n1;a@b.com\n"), &erroLista);
+        r.verificar(QStringLiteral("ImportadorAlunos: títulos sem a coluna Nome = erro explicado"),
+                    semNome && importador.planejar(turmaId, *semNome).erro.contains(QStringLiteral("coluna de nomes")));
+        r.verificar(QStringLiteral("ImportadorAlunos: texto vazio e arquivo enorme são recusados"),
+                    !ImportadorAlunos::tabelaDeTexto(QByteArray("  \n \n"), &erroLista) &&
+                        !ImportadorAlunos::tabelaDeTexto(QByteArray(ImportadorAlunos::kTamanhoMaximoDoTexto + 1, 'a'), &erroLista));
+        r.verificar(QStringLiteral("ImportadorAlunos: arquivo .xls antigo é recusado com orientação"),
+                    !ImportadorAlunos::tabelaDeArquivo(QStringLiteral("lista.xls"), &erroLista) && erroLista.contains(QStringLiteral(".xlsx")));
+
+        // Excel (.xlsx): matrícula numérica vira texto sem ".0" e a célula de data vira uma data de verdade.
+        const QString caminhoXlsx = pasta + QStringLiteral("/lista-alunos.xlsx");
+        {
+            QXlsx::Document doc;
+            doc.write(1, 1, QStringLiteral("Aluno"));
+            doc.write(1, 2, QStringLiteral("RA"));
+            doc.write(1, 3, QStringLiteral("Data de nascimento"));
+            doc.write(2, 1, QStringLiteral("Davi Costa"));
+            doc.write(2, 2, 2026777);
+            QXlsx::Format formatoData;
+            formatoData.setNumberFormat(QStringLiteral("dd/mm/yyyy"));
+            doc.write(2, 3, QDate(2012, 5, 20), formatoData);
+            r.verificar(QStringLiteral("preparar a lista em .xlsx"), doc.saveAs(caminhoXlsx));
+        }
+        const auto tabelaXlsx = ImportadorAlunos::tabelaDeArquivo(caminhoXlsx, &erroLista);
+        const PlanoImportacaoAlunos planoXlsx = tabelaXlsx ? importador.planejar(turmaId, *tabelaXlsx) : PlanoImportacaoAlunos();
+        r.verificar(QStringLiteral("ImportadorAlunos: lista em .xlsx (títulos \"Aluno\", \"RA\", \"Data de nascimento\")"),
+                    planoXlsx.erro.isEmpty() && planoXlsx.novos() == 1 && planoXlsx.linhas.first().aluno.nome == QStringLiteral("Davi Costa") &&
+                        planoXlsx.linhas.first().aluno.matricula == QStringLiteral("2026777") &&
+                        planoXlsx.linhas.first().aluno.dataNascimento == QDate(2012, 5, 20),
+                    erroLista + planoXlsx.erro);
+    }
+
     // --- Exclusão em cascata (depende de PRAGMA foreign_keys = ON) ---
     r.verificar(QStringLiteral("TurmaRepository::remover"), turmas.remover(turmaId), turmas.ultimoErro());
     r.verificar(QStringLiteral("exclusão em cascata: alunos, avaliações, notas, aulas e anexos somem com a turma"),
                 alunos.listarPorTurma(turmaId, QString(), true).isEmpty() && avaliacoes.listarPorTurma(turmaId, 0).isEmpty() &&
-                    notas.listarPorTurma(turmaId).isEmpty() && aulas.listar(turmaId).isEmpty() && anexos.listarPorTurma(turmaId).isEmpty());
+                    notas.listarPorTurma(turmaId).isEmpty() && aulas.listar(turmaId).isEmpty() && anexos.listarPorTurma(turmaId).isEmpty() &&
+                    ocorrencias.listarPorAluno(alunoId).isEmpty());
 }
 
 // ---------------------------------------------------------------------------
@@ -402,12 +604,14 @@ void testeMigracaoDeCores(Relatorio &r, const QString &pasta)
             // Simula um banco da versão 4, com turmas do padrão antigo e com cor própria.
             ok = Migrations::executarComando(db, QStringLiteral("INSERT INTO turmas (nome, ano_letivo, cor) VALUES ('Padrao antigo', 2026, '#4c8bf5')"), &erro) &&
                  Migrations::executarComando(db, QStringLiteral("INSERT INTO turmas (nome, ano_letivo, cor) VALUES ('Cor propria', 2026, '#112233')"), &erro) &&
+                 // Desfaz o que migrações posteriores à 4 criaram (a 6 criou "ocorrencias"), para simular um banco antigo de verdade.
+                 Migrations::executarComando(db, QStringLiteral("DROP TABLE ocorrencias"), &erro) &&
                  Migrations::executarComando(db, QStringLiteral("PRAGMA user_version = 4"), &erro);
             r.verificar(QStringLiteral("preparar banco na versão 4"), ok, erro);
         }
         if (ok) {
             ok = Migrations::aplicar(db, &erro);
-            r.verificar(QStringLiteral("migração 5 aplicada sobre o banco antigo"), ok && Migrations::versaoAtual(db) == 5, erro);
+            r.verificar(QStringLiteral("migração 5 aplicada sobre o banco antigo"), ok && Migrations::versaoAtual(db) == Migrations::todas().last().versao, erro);
 
             QSqlQuery q(db);
             QString padraoAntigo, propria;
@@ -457,7 +661,7 @@ void testeRecursosDoDesign(Relatorio &r)
                                    "subir", "baixar", "imagem", "usuario", "cadeado", "email", "olho", "olho-fechado",
                                    "sair", "chave", "janela-minimizar", "janela-maximizar", "janela-restaurar",
                                    "janela-fechar", "seta-baixo", "seta-cima", "seta-esquerda", "seta-direita", "marca",
-                                   "caderno-mark"};
+                                   "caderno-mark", "sino"};
     QStringList faltando;
     for (const char *nome : usados)
         if (!QFile::exists(QStringLiteral(":/icons/%1.svg").arg(QLatin1String(nome))))

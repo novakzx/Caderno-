@@ -50,6 +50,22 @@ Qt 6 Widgets + SQLite + QXlsx, C++17, CMake. Tudo offline. Textos da interface e
   Detalhes e riscos em `docs/SEGURANCA.md`.
 - Regra de segurança: **texto do usuário nunca vira HTML, fórmula do Excel ou SQL** (`toHtmlEscaped`, `Qt::PlainText`,
   `escreverTexto` do XlsxService, parâmetros `:nome`). Anexos: `ehArquivoExecutavel` recusa executáveis, scripts e Office com macros.
+## Alunos em atenção, ocorrências, lembretes e importação
+- **Versão**: uma só fonte, `project(... VERSION x.y.z)` no `CMakeLists.txt` → `PROFORG_VERSION` → `versaoDoApp()` (`core/BuildInfo.h`).
+  A etiqueta `vX.Y.Z` do Git precisa bater com ela (o workflow recusa se não bater).
+- **Alunos em atenção**: regras puras em `core/AtencaoUtil.h` (limites, níveis Urgente/Atenção, motivos); `DesempenhoService::alunosEmAtencao`
+  junta média + frequência + ocorrências; o cartão fica em `ui/HojePage`. A nota de corte é a do QSettings `"notaCorte"` (tela de Notas).
+- **Ocorrências**: migração 6 (`ocorrencias`, sem CHECK em `tipo`), `OcorrenciaRepository`, tipos em `core/OcorrenciaUtil.h` (novo tipo = nova linha,
+  sem migração; `negativa` decide se conta no painel), diálogo `ui/OcorrenciasDialog`, seção na ficha em PDF. Texto do usuário sempre escapado.
+- **Lembretes**: regras em `core/LembreteUtil.h`, quem decide o que avisar é `services/LembreteService` (testável sem interface), e
+  `ui/GerenteDeLembretes` mostra pela bandeja (`QSystemTrayIcon`) a cada 30 s e lembra o que já avisou no dia (QSettings, chave com resumo do e-mail).
+  Só avisa com o programa aberto. Preferências em `ui/LembretesDialog` (QSettings `lembretes/...`).
+- **Importar alunos**: `core/CsvUtil.h` (leitor de CSV puro), `services/ImportadorAlunos` (planejar → conferir → executar, numa transação),
+  `XlsxService::lerTabela`, `ui/ImportarAlunosDialog`. Nada é gravado antes de a pessoa confirmar; limites de tamanho/linhas.
+- **Instalador e Release**: `installer/Caderno.iss` (Inno Setup, sem administrador, não apaga dados) e, no workflow, o job `publicar` (só em etiqueta `v*`,
+  com `contents: write` apenas nele). O `AppId` do `.iss` não pode mudar.
+- Janela principal com **mínimo 1100x680** (a tela Turmas não cabe em menos); a barra lateral cabe em 680 de altura, então ao acrescentar botões
+  no rodapé confira isso (`D:\toolchain\shot2` tem uma checagem, fora do repositório).
 - Guias para o dono do projeto: `docs/GUIA-CLASSROOM.md` (integração/automações) e `docs/GUIA-PUBLICAR.md` (distribuição).
 - Build local (se houver Qt): o relógio do Windows às vezes volta no tempo; se o Ninja disser "no work to do" sem motivo,
   rode `cmake --build <pasta> --target clean` e compile de novo.

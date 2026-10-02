@@ -63,4 +63,9 @@ struct Planilha {
 // Lê a primeira aba do arquivo. Em caso de erro devolve nullopt e preenche *erro.
 std::optional<Planilha> importar(const QString &caminho, QString *erro);
 
+// Lê a primeira aba como uma tabela de textos (uma QStringList por linha, sem linhas vazias).
+// Datas viram "yyyy-MM-dd" e números inteiros (ex.: matrícula 2024001) não ganham ".0".
+// Serve para listas simples, como a importação de alunos; mesmos limites de tamanho de importar().
+std::optional<QList<QStringList>> lerTabela(const QString &caminho, QString *erro);
+
 }  // namespace XlsxService

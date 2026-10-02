@@ -3,10 +3,13 @@
 
 #include "database/AlunoRepository.h"
 #include "database/AnotacaoRepository.h"
+#include "database/OcorrenciaRepository.h"
 #include "database/Repositorios.h"
 #include "database/TurmaRepository.h"
 #include "ui/AlunoDialog.h"
 #include "ui/AnexosWidget.h"
+#include "ui/ImportarAlunosDialog.h"
+#include "ui/OcorrenciasDialog.h"
 #include "ui/TurmaDialog.h"
 
 #include <QCheckBox>
@@ -58,7 +61,8 @@ void configurarTabela(QTableWidget *t)
 }  // namespace
 
 TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
-    : QWidget(parent), m_turmas(repos.turmas), m_alunos(repos.alunos), m_anotacoes(repos.anotacoes)
+    : QWidget(parent), m_turmas(repos.turmas), m_alunos(repos.alunos), m_anotacoes(repos.anotacoes),
+      m_ocorrencias(repos.ocorrencias)
 {
     auto *raiz = new QVBoxLayout(this);
     raiz->setContentsMargins(32, 28, 32, 24);
@@ -115,37 +119,49 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     auto *la = new QVBoxLayout(painelAlunos);
     la->setContentsMargins(12, 0, 0, 0);
 
+    // Cabeçalho em duas linhas (título e botões / busca), para caber também na janela de tamanho mínimo.
+    auto *cabecalhoAlunos = new QVBoxLayout;
+    cabecalhoAlunos->setSpacing(8);
     auto *barraAlunos = new QHBoxLayout;
     m_tituloAlunos = new QLabel(QStringLiteral("Alunos"));
     m_tituloAlunos->setObjectName(QStringLiteral("sectionTitle"));
     m_busca = new QLineEdit;
     m_busca->setPlaceholderText(QStringLiteral("Buscar aluno por nome, matrícula ou e-mail..."));
     m_busca->setClearButtonEnabled(true);
-    m_busca->setMinimumWidth(260);
+    m_btnImportarAlunos = new QPushButton(QStringLiteral("Importar lista…"));
+    m_btnImportarAlunos->setToolTip(QStringLiteral("Importar alunos de um arquivo CSV ou Excel, ou de uma lista colada"));
+    ThemeManager::iconeNoBotao(m_btnImportarAlunos, QStringLiteral("subir"));
     m_btnNovoAluno = new QPushButton(QStringLiteral("+ Novo aluno"));
     m_btnNovoAluno->setObjectName(QStringLiteral("primary"));
     barraAlunos->addWidget(m_tituloAlunos);
     barraAlunos->addStretch(1);
-    barraAlunos->addWidget(m_busca);
+    barraAlunos->addWidget(m_btnImportarAlunos);
     barraAlunos->addWidget(m_btnNovoAluno);
-    la->addLayout(barraAlunos);
+    cabecalhoAlunos->addLayout(barraAlunos);
+    cabecalhoAlunos->addWidget(m_busca);
+    la->addLayout(cabecalhoAlunos);
 
-    m_tabelaAlunos = new QTableWidget(0, 5);
+    m_tabelaAlunos = new QTableWidget(0, 6);
     m_tabelaAlunos->setHorizontalHeaderLabels({QStringLiteral("Matrícula"), QStringLiteral("Nome"),
                                                QStringLiteral("E-mail"), QStringLiteral("Nascimento"),
-                                               QStringLiteral("Situação")});
+                                               QStringLiteral("Situação"), QStringLiteral("Ocorr.")});
     configurarTabela(m_tabelaAlunos);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_tabelaAlunos->horizontalHeaderItem(5)->setToolTip(QStringLiteral("Ocorrências registradas sobre o aluno"));
     la->addWidget(m_tabelaAlunos, 1);
 
     auto *rodapeAlunos = new QHBoxLayout;
+    m_btnOcorrencias = new QPushButton(QStringLiteral("Ocorrências…"));
+    m_btnOcorrencias->setToolTip(QStringLiteral("Elogios, conduta, dificuldades e contatos com a família"));
     m_btnEditarAluno = new QPushButton(QStringLiteral("Editar"));
     m_btnExcluirAluno = new QPushButton(QStringLiteral("Excluir"));
     m_btnExcluirAluno->setObjectName(QStringLiteral("danger"));
+    rodapeAlunos->addWidget(m_btnOcorrencias);
     rodapeAlunos->addStretch(1);
     rodapeAlunos->addWidget(m_btnEditarAluno);
     rodapeAlunos->addWidget(m_btnExcluirAluno);
@@ -201,6 +217,8 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     connect(m_tabelaTurmas, &QTableWidget::cellDoubleClicked, this, [this] { editarTurma(); });
 
     connect(m_btnNovoAluno, &QPushButton::clicked, this, &TurmasPage::novoAluno);
+    connect(m_btnImportarAlunos, &QPushButton::clicked, this, &TurmasPage::importarAlunos);
+    connect(m_btnOcorrencias, &QPushButton::clicked, this, &TurmasPage::abrirOcorrencias);
     connect(m_btnEditarAluno, &QPushButton::clicked, this, &TurmasPage::editarAluno);
     connect(m_btnExcluirAluno, &QPushButton::clicked, this, &TurmasPage::excluirAluno);
     connect(m_busca, &QLineEdit::textChanged, this, [this] { recarregarAlunos(alunoSelecionadoId()); });
@@ -387,6 +405,7 @@ void TurmasPage::recarregarAlunos(int selecionarId)
     m_tituloAlunos->setText(QStringLiteral("Alunos de %1").arg(turma ? turma->nome : QString()));
 
     const QList<Aluno> lista = m_alunos.listarPorTurma(turmaId, m_busca->text());
+    const QHash<int, int> ocorrencias = m_ocorrencias.contarPorAluno(turmaId);
     int linhaParaSelecionar = -1;
     for (const Aluno &a : lista) {
         const int linha = m_tabelaAlunos->rowCount();
@@ -402,6 +421,10 @@ void TurmasPage::recarregarAlunos(int selecionarId)
                                                        : QString()));
         m_tabelaAlunos->setItem(linha, 4, novoItem(a.ativo ? QStringLiteral("Ativo")
                                                            : QStringLiteral("Inativo")));
+        const int total = ocorrencias.value(a.id, 0);
+        auto *itemOcorrencias = novoItem(total > 0 ? QString::number(total) : QString());
+        itemOcorrencias->setTextAlignment(Qt::AlignCenter);
+        m_tabelaAlunos->setItem(linha, 5, itemOcorrencias);
         if (a.id == selecionarId)
             linhaParaSelecionar = linha;
     }
@@ -431,6 +454,22 @@ void TurmasPage::novoAluno()
     recarregarAlunos(id);
 }
 
+void TurmasPage::importarAlunos()
+{
+    const int turmaId = turmaSelecionadaId();
+    const auto turma = m_turmas.buscar(turmaId);
+    if (!turma)
+        return;
+
+    ImportarAlunosDialog dlg(m_alunos, turmaId, turma->nome, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    recarregarTurmas(turmaId);  // atualiza também o contador de alunos da turma
+    QMessageBox::information(this, QStringLiteral("Alunos importados"),
+                             dlg.alunosCriados() == 1 ? QStringLiteral("1 aluno foi adicionado à turma.")
+                                                      : QStringLiteral("%1 alunos foram adicionados à turma.").arg(dlg.alunosCriados()));
+}
+
 void TurmasPage::editarAluno()
 {
     const int id = alunoSelecionadoId();
@@ -448,6 +487,17 @@ void TurmasPage::editarAluno()
     }
     recarregarTurmas(existente->turmaId);
     recarregarAlunos(id);
+}
+
+void TurmasPage::abrirOcorrencias()
+{
+    const int id = alunoSelecionadoId();
+    const auto aluno = m_alunos.buscar(id);
+    if (!aluno)
+        return;
+    OcorrenciasDialog dlg(m_ocorrencias, *aluno, this);
+    dlg.exec();
+    recarregarAlunos(id);  // atualiza a contagem de ocorrências
 }
 
 void TurmasPage::excluirAluno()
@@ -482,7 +532,9 @@ void TurmasPage::atualizarEstadoBotoes()
     m_btnEditarTurma->setEnabled(temTurma);
     m_btnExcluirTurma->setEnabled(temTurma);
     m_btnNovoAluno->setEnabled(temTurma);
+    m_btnImportarAlunos->setEnabled(temTurma);
     m_busca->setEnabled(temTurma);
+    m_btnOcorrencias->setEnabled(temAluno);
     m_btnEditarAluno->setEnabled(temAluno);
     m_btnExcluirAluno->setEnabled(temAluno);
 }

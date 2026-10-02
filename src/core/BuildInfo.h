@@ -10,11 +10,21 @@
 #define PROFORG_STR_INNER(x) #x
 #define PROFORG_STR(x) PROFORG_STR_INNER(x)
 
+// Vem do CMake (project(... VERSION ...)); o valor abaixo só vale em compilações fora dele.
+#ifndef PROFORG_VERSION
+#define PROFORG_VERSION "1.1.0"
+#endif
+
+inline QString versaoDoApp()
+{
+    return QStringLiteral(PROFORG_VERSION);
+}
+
 inline QString identificacaoDoBuild()
 {
 #ifdef PROFORG_BUILD_ID_RAW
-    return QStringLiteral("1.0.0 · build %1").arg(QLatin1String(PROFORG_STR(PROFORG_BUILD_ID_RAW)));
+    return QStringLiteral("%1 · build %2").arg(versaoDoApp(), QLatin1String(PROFORG_STR(PROFORG_BUILD_ID_RAW)));
 #else
-    return QStringLiteral("1.0.0 · build local");
+    return QStringLiteral("%1 · build local").arg(versaoDoApp());
 #endif
 }

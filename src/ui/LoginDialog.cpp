@@ -1,5 +1,6 @@
 #include "ui/LoginDialog.h"
 
+#include "core/BuildInfo.h"
 #include "core/ContaUtil.h"
 #include "ui/BotoesAnimados.h"
 #include "ui/PilhaAnimada.h"
@@ -176,7 +177,7 @@ QWidget *LoginDialog::criarPainelMarca()
     }
     layout->addStretch(1);
 
-    auto *rodape = new QLabel(QStringLiteral("Versão 1.0"));
+    auto *rodape = new QLabel(QStringLiteral("Versão %1").arg(versaoDoApp()));
     rodape->setObjectName(QStringLiteral("marcaFrase"));
     layout->addWidget(rodape);
     return painel;

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(ProfOrganizer VERSION 1.0.0 LANGUAGES CXX)
+project(ProfOrganizer VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,6 +52,8 @@ endif()
 qt_add_executable(ProfOrganizer WIN32 MACOSX_BUNDLE ${SOURCES} ${RECURSOS})
 
 target_include_directories(ProfOrganizer PRIVATE src)
+# Número da versão: uma só fonte (a linha project(... VERSION) acima). Vai para o código como PROFORG_VERSION.
+target_compile_definitions(ProfOrganizer PRIVATE PROFORG_VERSION="${PROJECT_VERSION}")
 target_link_libraries(ProfOrganizer PRIVATE Qt6::Widgets Qt6::Sql Qt6::Svg QXlsx::QXlsx)
 
 # Identificação do build (início do hash do commit), passada pelo workflow:
@@ -64,7 +66,7 @@ endif()
 
 # --- Testes (sem Qt): ctest --test-dir build ------------------------------------
 enable_testing()
-foreach(nome media horario frequencia contraste conta)
+foreach(nome media horario frequencia contraste conta atencao lembrete csv)
     add_executable(test_${nome} tests/test_${nome}.cpp)
     target_include_directories(test_${nome} PRIVATE src)
     add_test(NAME ${nome} COMMAND test_${nome})

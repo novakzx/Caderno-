@@ -6,6 +6,7 @@
 #include "database/AvaliacaoRepository.h"
 #include "database/FrequenciaRepository.h"
 #include "database/NotaRepository.h"
+#include "database/OcorrenciaRepository.h"
 #include "database/Repositorios.h"
 #include "database/TurmaRepository.h"
 
@@ -116,7 +117,55 @@ std::optional<FichaAluno> DesempenhoService::ficha(int alunoId)
         if (r.situacao != QLatin1Char('P'))
             f.ocorrencias.append(r);
     }
+    f.historico = m_repos.ocorrencias.listarPorAluno(alunoId);
     return f;
+}
+
+QList<AlunoEmAtencao> DesempenhoService::alunosEmAtencao(double notaCorte, const QDate &hoje)
+{
+    AtencaoUtil::Limites limites;
+    limites.notaCorte = notaCorte;
+    const QDate desde = hoje.addDays(-limites.diasDeOcorrencias);
+
+    QList<AlunoEmAtencao> resultado;
+    for (const Turma &turma : m_repos.turmas.listar(/*incluirArquivadas=*/false)) {
+        const auto b = boletim(turma.id, 0);
+        if (!b)
+            continue;
+        const QHash<int, int> negativas = m_repos.ocorrencias.contarNegativasPorAluno(turma.id, desde);
+
+        for (const LinhaBoletim &linha : b->linhas) {
+            AtencaoUtil::Entrada entrada;
+            entrada.media = linha.media;
+            entrada.frequenciaPct = linha.frequenciaPct;
+            entrada.ocorrenciasNegativasRecentes = negativas.value(linha.alunoId, 0);
+            const AtencaoUtil::Resultado avaliacao = AtencaoUtil::avaliar(entrada, limites);
+            if (avaliacao.nivel == AtencaoUtil::Nivel::Nenhum)
+                continue;
+
+            AlunoEmAtencao a;
+            a.alunoId = linha.alunoId;
+            a.turmaId = turma.id;
+            a.nome = linha.nome;
+            a.turmaNome = turma.nome;
+            a.turmaCor = turma.cor;
+            a.media = linha.media;
+            a.frequenciaPct = linha.frequenciaPct;
+            a.ocorrenciasNegativas = entrada.ocorrenciasNegativasRecentes;
+            a.nivel = avaliacao.nivel;
+            a.motivos = avaliacao.motivos;
+            resultado.append(a);
+        }
+    }
+
+    std::stable_sort(resultado.begin(), resultado.end(), [](const AlunoEmAtencao &x, const AlunoEmAtencao &y) {
+        if (x.nivel != y.nivel)
+            return x.nivel == AtencaoUtil::Nivel::Critico;  // críticos primeiro
+        if (x.motivos.size() != y.motivos.size())
+            return x.motivos.size() > y.motivos.size();
+        return QString::localeAwareCompare(x.nome, y.nome) < 0;
+    });
+    return resultado;
 }
 
 QVector<int> DesempenhoService::distribuicaoDeMedias(const Boletim &b, int faixas, double maximo)

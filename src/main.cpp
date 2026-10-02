@@ -10,6 +10,7 @@
 #include "database/FrequenciaRepository.h"
 #include "database/HorarioRepository.h"
 #include "database/NotaRepository.h"
+#include "database/OcorrenciaRepository.h"
 #include "database/Repositorios.h"
 #include "database/TarefaRepository.h"
 #include "database/TurmaRepository.h"
@@ -42,7 +43,7 @@ int main(int argc, char *argv[])
     // Nome/organização definem a pasta de dados e as chaves do QSettings.
     QApplication::setApplicationName(QStringLiteral("ProfOrganizer"));
     QApplication::setOrganizationName(QStringLiteral("ProfOrganizer"));
-    QApplication::setApplicationVersion(QStringLiteral("1.0.0"));
+    QApplication::setApplicationVersion(versaoDoApp());
     // Nome exibido e ícone (o nome interno "ProfOrganizer" acima não muda: é a pasta dos dados).
     QApplication::setApplicationDisplayName(QStringLiteral("Caderno+"));
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/icon-256.png")));
@@ -114,8 +115,9 @@ int main(int argc, char *argv[])
         FrequenciaRepository frequencia;
         EventoRepository eventos;
         BuscaRepository busca;
+        OcorrenciaRepository ocorrencias;
         Repositorios repos{turmas, alunos, avaliacoes, notas, horarios, tarefas, agenda,
-                           aulas, anexos, anotacoes, frequencia, eventos, busca};
+                           aulas, anexos, anotacoes, frequencia, eventos, busca, ocorrencias};
 
         MainWindow janela(repos, conta.nome, conta.email);
         bool trocarDeConta = false;

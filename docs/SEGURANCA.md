@@ -10,7 +10,8 @@ Revisão do código feita em outubro de 2026. Ela cobre o programa em si (C++/Qt
 | Turmas, alunos, notas, frequência, anotações | `%APPDATA%\ProfOrganizer\ProfOrganizer\professor.db` (1ª conta) e `contas\<id>\professor.db` (demais) | SQLite, **sem criptografia** |
 | Contas (nome, e-mail, hash da senha) | `...\contas.db` | só hash PBKDF2 e sal, nunca a senha |
 | Backups | pasta `backups` ao lado do banco de cada conta | cópia do banco, também sem criptografia |
-| Preferências | registro do Windows (QSettings) | tema, última seção, último e-mail usado |
+| Ocorrências sobre alunos (conduta, dificuldade, contato com a família) | mesmo `professor.db` da conta | dado **sensível**: ver "Riscos" e "LGPD" |
+| Preferências | registro do Windows (QSettings) | tema, última seção, último e-mail usado, lembretes (ligado, antecedência) e a lista de avisos já dados hoje (só ids e um resumo, sem nomes) |
 
 Tudo fica no computador do usuário. O programa não envia nada pela internet.
 
@@ -26,6 +27,10 @@ Tudo fica no computador do usuário. O programa não envia nada pela internet.
 | 6 | Baixa | **Dados apagados ficavam no arquivo** (um aluno excluído continuava legível nas páginas livres do SQLite). | **Corrigido**: `PRAGMA secure_delete = ON`. |
 | 7 | Média | **Cadeia de entrega.** O CI usava ações do GitHub por rótulo móvel (`@v4`), baixava o QXlsx do `master` e o token tinha permissões padrão. | **Corrigido**: ações e QXlsx fixados por hash de commit, `permissions: contents: read`, `persist-credentials: false`. |
 | 8 | Informativo | SQL: todas as consultas usam parâmetros; as partes montadas com texto (`SELECT_BASE`, `where`, `ordem`) vêm só de constantes do código. O `VACUUM INTO` do backup escapa as aspas do caminho. | Sem ação. |
+| 9 | Média | **Importação de lista de alunos** (CSV/Excel/colagem) é entrada de fora. | **Tratada na construção**: limite de 5 MB (texto) e 5.000 linhas/200 colunas (Excel); tudo vira texto puro (nada é fórmula, HTML ou SQL; parâmetros `:nome`); nada é gravado antes da confirmação; gravação numa transação única; tamanhos de nome/matrícula/e-mail limitados. Coberto no autoteste (inclui texto `=HYPERLINK(...)`). |
+| 10 | Baixa | **Ocorrências e PDF**: o texto da ocorrência entra na ficha em PDF (HTML interno). | **Escapado** com `toHtmlEscaped()`; coberto no autoteste. |
+| 11 | Informativo | **Lembretes**: a notificação do Windows mostra título de tarefa/prova e nome da turma, que podem aparecer na tela bloqueada conforme a configuração do Windows. Nomes de alunos **não** entram nas notificações. | Sem ação; desligue em "Lembretes" se não quiser. |
+| 12 | Média | **Instalador e Release**: a etiqueta publica um executável. | O job que publica é separado, com `contents: write` só nele; a versão da etiqueta precisa bater com o `CMakeLists.txt`; ações fixadas por hash; `SHA256SUMS.txt` na Release. O `.exe` continua **sem assinatura** (risco 4). |
 
 ## Contas locais (login)
 
@@ -57,8 +62,9 @@ Tudo fica no computador do usuário. O programa não envia nada pela internet.
 
 ## LGPD (dados de alunos)
 
-Notas, frequência e observações sobre alunos são **dados pessoais**; se o aluno for menor de idade, valem os cuidados
-do art. 14 da LGPD. Boas práticas: use só o necessário, não envie planilhas e backups por aplicativos de mensagem,
+Notas, frequência, observações e **ocorrências** (conduta, dificuldade de aprendizagem, contatos com a família) sobre alunos são
+**dados pessoais**, e as ocorrências podem expor informações delicadas; se o aluno for menor de idade, valem os cuidados
+do art. 14 da LGPD. Registre fatos objetivos, evite diagnósticos e dados de saúde, e lembre que o banco não é criptografado (risco 1). Boas práticas: use só o necessário, não envie planilhas e backups por aplicativos de mensagem,
 apague os dados de turmas antigas conforme a política da escola, e confirme com a escola quem é o controlador dos
 dados antes de integrar serviços externos (Classroom, nuvem).
 
