@@ -48,6 +48,7 @@ signals:
 protected:
     void closeEvent(QCloseEvent *evento) override;
     void changeEvent(QEvent *evento) override;
+    void showEvent(QShowEvent *evento) override;
     bool eventFilter(QObject *objeto, QEvent *evento) override;
 
 private:
@@ -61,6 +62,7 @@ private:
     void abrirBusca();
     void navegarPara(const ItemBusca &item);
     void abrirBackup();
+    void abrirSobre();
     void abrirConfiguracoes(int aba);  // aba = ConfiguracoesDialog::Aba
     void verificarInatividade();
     void verificarAtualizacao();

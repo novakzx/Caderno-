@@ -32,7 +32,8 @@ Qt 6 Widgets + SQLite + QXlsx, C++17, CMake. Tudo offline. Textos da interface e
 - Cor da turma: o banco guarda o NOME do token (`turma-1`…`turma-6`, padrão `turma-6`; migração 5); cor antiga em `#rrggbb` continua valendo.
 - Estado nunca só por cor; texto ≥ 4.5:1 nos dois temas. Sem emojis na interface (tudo usa os ícones SVG de `resources/icons`).
 - Ícones: `resources/icons/*.svg` (traço 1.5, grade 24, `currentColor`; recoloridos por `ThemeManager::icone`), embutidos pelo
-  `resources/resources.qrc` (prefixo `:/icons`; o `app.ico` entra no .exe via `resources/app.rc`).
+  `resources/resources.qrc` (prefixo `:/icons`; o `app.ico` entra no .exe via `resources/app.rc.in`, que o CMake gera e que também leva as
+  propriedades do .exe: versão, autor, copyright).
 - Fonte: Figtree 400/600/700 em `resources/fonts` (prefixo `:/fonts`, licença OFL em `OFL.txt`), carregada por
   `ThemeManager::carregarFontes()`; reserva Segoe UI.
 
@@ -75,6 +76,13 @@ Qt 6 Widgets + SQLite + QXlsx, C++17, CMake. Tudo offline. Textos da interface e
 - Ao rodar o autoteste/teste do instalador na máquina de quem desenvolve, não apagar nada em `D:\toolchain` (a pasta é protegida): usar pastas temporárias.
 - Janela principal com **mínimo 1100x680** (a tela Turmas não cabe em menos); a barra lateral cabe em 680 de altura, então ao acrescentar botões
   no rodapé confira isso (`D:\toolchain\shot2` tem uma checagem, fora do repositório).
+- **Autoria e Sobre**: o autor tem uma fonte (`autorDoApp()` em `core/BuildInfo.h`; o texto se repete em `resources/app.rc.in`, `installer/setup/src/instalar.h`
+  e `installer/setup/recursos/setup.rc`). `ui/SobreDialog` (F1 ou o link do rodapé da janela) mostra logo, versão, autor, projeto e licenças.
+- **Ícone na barra de tarefas**: `ui/IconeDaJanela` entrega ao Windows o ícone embutido no .exe (recurso `IDI_ICON1`, 16 a 256 px) em `showEvent` da
+  janela principal e do login; a janela sem moldura não pode depender só do ícone do Qt.
+- **Estados vazios**: `ui/EstadoVazio::sobre(lista, icone, titulo, dica)` cobre lista/tabela vazia e some sozinho (liga ao modelo). Cabeçalhos de tabela
+  alinham à esquerda (filtro em `ThemeManager.cpp`); coluna de números centralizada marca o cabeçalho com `setProperty("centralizado", true)`.
+  Linhas dentro de cartões usam `objectName("linhaDoCartao")` (fundo transparente no QSS).
 - Guias para o dono do projeto: `docs/GUIA-CLASSROOM.md` (integração/automações) e `docs/GUIA-PUBLICAR.md` (distribuição).
 - Build local (se houver Qt): o relógio do Windows às vezes volta no tempo; se o Ninja disser "no work to do" sem motivo,
   rode `cmake --build <pasta> --target clean` e compile de novo.

@@ -20,6 +20,24 @@ inline QString versaoDoApp()
     return QStringLiteral(PROFORG_VERSION);
 }
 
+// Autoria do programa: um só lugar. Aparece em "Sobre o Caderno+", na tela de entrada, no instalador
+// e nas propriedades do .exe (resources/app.rc.in e installer/setup/recursos/setup.rc repetem o texto).
+inline QString autorDoApp()
+{
+    return QStringLiteral("Gabriel (novakzx)");
+}
+
+inline QString enderecoDoProjeto()
+{
+    return QStringLiteral("https://github.com/novakzx/Caderno-");
+}
+
+// Passo a passo para ligar o Assistente de IA (abre no navegador; o endereço é fixo, nunca vem de dados do usuário).
+inline QString guiaDaIa()
+{
+    return enderecoDoProjeto() + QStringLiteral("/blob/main/docs/GUIA-IA.md");
+}
+
 inline QString identificacaoDoBuild()
 {
 #ifdef PROFORG_BUILD_ID_RAW

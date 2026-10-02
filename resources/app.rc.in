@@ -1,0 +1,29 @@
+// Gerado pelo CMake (configure_file): o icone do .exe e as "Propriedades > Detalhes" do Windows.
+// So ASCII aqui (o compilador de recursos nao le UTF-8 de forma confiavel).
+IDI_ICON1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/icons/app.ico"
+
+1 VERSIONINFO
+FILEVERSION @PROFORG_RC_VERSAO@
+PRODUCTVERSION @PROFORG_RC_VERSAO@
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041604B0"
+    BEGIN
+      VALUE "CompanyName", "Gabriel (novakzx)"
+      VALUE "FileDescription", "Caderno+ - organizador para professores"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "InternalName", "ProfOrganizer"
+      VALUE "LegalCopyright", "Copyright (C) 2026 Gabriel (novakzx)"
+      VALUE "OriginalFilename", "ProfOrganizer.exe"
+      VALUE "ProductName", "Caderno+"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0416, 1200
+  END
+END

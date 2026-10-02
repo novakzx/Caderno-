@@ -1,4 +1,5 @@
 #include "ui/TarefasPage.h"
+#include "ui/EstadoVazio.h"
 #include "ui/ThemeManager.h"
 
 #include "database/Repositorios.h"
@@ -78,6 +79,8 @@ TarefasPage::TarefasPage(Repositorios &repos, QWidget *parent)
     m_tabela->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_tabela->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_tabela->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    EstadoVazio::sobre(m_tabela, QStringLiteral("tarefas"), QStringLiteral("Nenhuma tarefa por aqui"),
+                       QStringLiteral("Clique em \"+ Nova tarefa\" para anotar o que precisa fazer."));
     raiz->addWidget(m_tabela, 1);
 
     m_resumo = new QLabel;

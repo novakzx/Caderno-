@@ -166,7 +166,7 @@ QString IaService::mensagemDeErro(int status, const QByteArray &corpo, QNetworkR
     case 401:
     case 403:
         return comDetalhe(QStringLiteral("O token foi recusado. Confira se ele está certo e se tem a permissão \"Workers AI\" "
-                                         "(leitura e edição). Veja o guia em docs/GUIA-IA.md."));
+                                         "(leitura e edição). Em Configurações > Assistente de IA há um link para o passo a passo."));
     case 404:
         return comDetalhe(QStringLiteral("Não encontrei esse modelo ou esse Account ID. Confira os dois nas Configurações."));
     case 408:

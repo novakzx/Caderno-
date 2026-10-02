@@ -1,4 +1,5 @@
 #include "ui/AnotacoesPage.h"
+#include "ui/EstadoVazio.h"
 #include "ui/ThemeManager.h"
 
 #include "database/AlunoRepository.h"
@@ -89,15 +90,16 @@ AnotacoesPage::AnotacoesPage(Repositorios &repos, QWidget *parent)
     m_lista = new QListWidget;
     m_lista->setAlternatingRowColors(true);
     ll->addWidget(m_lista, 1);
+    EstadoVazio::sobre(m_lista, QStringLiteral("anotacoes"), QStringLiteral("Nenhuma anotação"),
+                       QStringLiteral("As anotações que você criar aparecem aqui."));
 
     // ---------------- Editor ----------------
     auto *painelEditor = new QWidget;
     auto *le = new QVBoxLayout(painelEditor);
     le->setContentsMargins(12, 0, 0, 0);
 
-    m_vazio = new QLabel(QStringLiteral("Selecione uma anotação ou clique em \"+ Nova anotação\"."));
-    m_vazio->setObjectName(QStringLiteral("muted"));
-    m_vazio->setAlignment(Qt::AlignCenter);
+    m_vazio = new EstadoVazio(QStringLiteral("anotacoes"), QStringLiteral("Nenhuma anotação aberta"),
+                              QStringLiteral("Selecione uma anotação da lista ou clique em \"+ Nova anotação\"."));
     le->addWidget(m_vazio, 1);
 
     m_editor = new QWidget;

@@ -43,10 +43,12 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
 
 # Ícone e imagens do app (resources/): .qrc embute os PNGs, os ícones SVG e as fontes Figtree;
-# .rc dá o ícone do .exe no Windows.
+# .rc (gerado de app.rc.in) dá o ícone e as propriedades (versão, autor) do .exe no Windows.
 set(RECURSOS ${CMAKE_CURRENT_SOURCE_DIR}/resources/resources.qrc)
 if(WIN32)
-    list(APPEND RECURSOS ${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc)
+    set(PROFORG_RC_VERSAO "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc.in ${CMAKE_CURRENT_BINARY_DIR}/app.rc @ONLY)
+    list(APPEND RECURSOS ${CMAKE_CURRENT_BINARY_DIR}/app.rc)
 endif()
 
 qt_add_executable(ProfOrganizer WIN32 MACOSX_BUNDLE ${SOURCES} ${RECURSOS})

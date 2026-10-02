@@ -1061,7 +1061,7 @@ void Tela::desenhar(Graphics &g, double t)
         std::wstring rodape = L"Versão " + config_.versao;
         if (config_.tamanhoEmMB)
             rodape += L"  ·  " + std::to_wstring(config_.tamanhoEmMB) + L" MB";
-        rodape += L"  ·  Não precisa de administrador";
+        rodape += L"  ·  Não precisa de administrador  ·  por " + std::wstring(Instalar::kAutor);
         texto(g, rodape, *fPequena_, RectF(0, kAltura - 34, kLargura, 20), comAlfa(kTintaSuave, 0.8f * alfa), StringAlignmentCenter, StringAlignmentCenter, true);
         if (config_.aplicativoAberto)
             texto(g, L"O Caderno+ está aberto e será fechado durante a instalação.", *fPequena_, RectF(0, 410, kLargura, 20), comAlfa(kDestaque, alfa),

@@ -5,6 +5,7 @@
 class AnexosWidget;
 class AulaRepository;
 struct Repositorios;
+class EstadoVazio;
 class QComboBox;
 class QDateEdit;
 class QLabel;
@@ -61,5 +62,5 @@ private:
     QPushButton *m_btnSalvar = nullptr;
     QPushButton *m_btnExcluir = nullptr;
     QLabel *m_estado = nullptr;
-    QLabel *m_vazio = nullptr;
+    EstadoVazio *m_vazio = nullptr;
 };

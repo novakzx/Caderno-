@@ -125,6 +125,8 @@ NotasPage::NotasPage(TurmaRepository &turmas, AlunoRepository &alunos,
     m_tabela->verticalHeader()->setVisible(false);
     m_tabela->horizontalHeader()->setHighlightSections(false);
     m_tabela->horizontalHeader()->setDefaultAlignment(Qt::AlignCenter);
+    m_tabela->horizontalHeader()->setProperty("centralizado", true);  // colunas de notas (ThemeManager não mexe)
+    m_tabela->viewport()->installEventFilter(this);  // para preencher a largura (preencherLargura)
     raiz->addWidget(m_tabela, 1);
 
     // ---------------- Rodapé: resumo e mensagens ----------------
@@ -252,6 +254,30 @@ void NotasPage::ajustarColunas()
         m_tabela->setColumnWidth(c, c == m_modelo->colunaMedia() ? 90 : 130);
     }
     h->setMinimumHeight(52);  // cabeçalho com duas linhas (nome + peso/máx)
+    preencherLargura();
+}
+
+void NotasPage::preencherLargura()
+{
+    if (!m_modelo)
+        return;
+    const int n = m_modelo->columnCount();
+    if (n == 0)
+        return;
+    int outras = 0;
+    for (int c = 1; c < n; ++c)
+        outras += m_tabela->columnWidth(c);
+    // Sem coluna sobrando, a tabela rola na horizontal; com folga, o nome do aluno ocupa o espaço livre.
+    const int largura = qMax(240, m_tabela->viewport()->width() - outras);
+    if (m_tabela->columnWidth(0) != largura)
+        m_tabela->setColumnWidth(0, largura);
+}
+
+bool NotasPage::eventFilter(QObject *objeto, QEvent *evento)
+{
+    if (m_tabela && objeto == m_tabela->viewport() && evento->type() == QEvent::Resize)
+        QTimer::singleShot(0, this, &NotasPage::preencherLargura);
+    return QWidget::eventFilter(objeto, evento);
 }
 
 void NotasPage::atualizarEstado()

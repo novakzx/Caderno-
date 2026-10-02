@@ -313,7 +313,7 @@ bool instalar(const Pacote::Conteudo &pacote, const Opcoes &opcoes, Andamento &a
     const std::wstring chave = kChaveDesinstalar;
     Sistema::gravarTexto(chave, L"DisplayName", L"Caderno+");
     Sistema::gravarTexto(chave, L"DisplayVersion", versao);
-    Sistema::gravarTexto(chave, L"Publisher", L"Caderno+");
+    Sistema::gravarTexto(chave, L"Publisher", kAutor);
     Sistema::gravarTexto(chave, L"InstallLocation", pasta);
     Sistema::gravarTexto(chave, L"DisplayIcon", exe);
     Sistema::gravarTexto(chave, L"UninstallString", L"\"" + desinstalador + L"\"");

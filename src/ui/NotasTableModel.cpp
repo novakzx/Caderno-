@@ -268,8 +268,11 @@ QVariant NotasTableModel::headerData(int section, Qt::Orientation orientation, i
         return {};
     }
 
-    if (section == 0)
+    if (section == 0) {  // o título "Aluno" fica sobre os nomes (à esquerda); as colunas de notas são centralizadas
+        if (role == Qt::TextAlignmentRole)
+            return int(Qt::AlignLeft | Qt::AlignVCenter);
         return role == Qt::DisplayRole ? QVariant(QStringLiteral("Aluno")) : QVariant();
+    }
     if (section == colunaMedia())
         return role == Qt::DisplayRole ? QVariant(QStringLiteral("Média")) : QVariant();
 

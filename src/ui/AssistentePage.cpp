@@ -4,6 +4,7 @@
 #include "database/AulaRepository.h"
 #include "database/Repositorios.h"
 #include "database/TurmaRepository.h"
+#include "core/BuildInfo.h"
 #include "services/IaService.h"
 #include "ui/ThemeManager.h"
 
@@ -11,6 +12,7 @@
 #include <QClipboard>
 #include <QComboBox>
 #include <QDateEdit>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -25,6 +27,7 @@
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QTextCursor>
+#include <QUrl>
 #include <QVBoxLayout>
 
 using IaPrompts::Tarefa;
@@ -67,7 +70,11 @@ AssistentePage::AssistentePage(Repositorios &repos, QWidget *parent)
     m_textoAviso->setTextFormat(Qt::PlainText);
     auto *configurar = new QPushButton(QStringLiteral("Configurar"));
     configurar->setObjectName(QStringLiteral("primary"));
+    auto *comoObter = new QPushButton(QStringLiteral("Como obter"));
+    comoObter->setToolTip(QStringLiteral("Abre o passo a passo no navegador"));
+    connect(comoObter, &QPushButton::clicked, this, [] { QDesktopServices::openUrl(QUrl(guiaDaIa())); });
     la->addWidget(m_textoAviso, 1);
+    la->addWidget(comoObter, 0, Qt::AlignVCenter);
     la->addWidget(configurar, 0, Qt::AlignVCenter);
     raiz->addWidget(m_aviso);
     raiz->addSpacing(4);
@@ -249,8 +256,8 @@ void AssistentePage::atualizarAviso()
     const bool pronto = c.completa();
     m_aviso->setVisible(!pronto);
     if (!pronto)
-        m_textoAviso->setText(QStringLiteral("A IA ainda não está configurada. Ela usa a sua conta gratuita do Cloudflare: informe o Account ID e "
-                                             "um token nas Configurações (o passo a passo está em docs/GUIA-IA.md)."));
+        m_textoAviso->setText(QStringLiteral("A IA ainda não está configurada. Ela usa a sua conta gratuita do Cloudflare: informe o "
+                                             "Account ID e um token nas Configurações. \"Como obter\" abre o passo a passo."));
     definirOcupado(m_ocupado);
 }
 

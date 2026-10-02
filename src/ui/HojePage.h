@@ -42,6 +42,10 @@ private:
 
     QLabel *m_data = nullptr;
     QLabel *m_resumo = nullptr;
+    QLabel *m_numAulas = nullptr;
+    QLabel *m_numTarefas = nullptr;
+    QLabel *m_numProvas = nullptr;
+    QLabel *m_numAtencao = nullptr;
     QVBoxLayout *m_listaAulas = nullptr;
     QVBoxLayout *m_listaTarefas = nullptr;
     QVBoxLayout *m_listaProvas = nullptr;

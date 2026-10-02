@@ -7,6 +7,7 @@ class AlunoRepository;
 class AnotacaoRepository;
 class AulaRepository;
 struct Repositorios;
+class EstadoVazio;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -74,7 +75,7 @@ private:
 
     // Editor
     QWidget *m_editor = nullptr;
-    QLabel *m_vazio = nullptr;
+    EstadoVazio *m_vazio = nullptr;
     QLineEdit *m_titulo = nullptr;
     QComboBox *m_turma = nullptr;
     QComboBox *m_aluno = nullptr;

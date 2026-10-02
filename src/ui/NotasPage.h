@@ -25,11 +25,13 @@ public:
 protected:
     // A cada vez que a tela aparece, relê as turmas (podem ter mudado na tela Turmas).
     void showEvent(QShowEvent *evento) override;
+    bool eventFilter(QObject *objeto, QEvent *evento) override;
 
 private:
     void recarregarTurmas();
     void recarregarModelo(int avaliacaoParaSelecionar = 0);
     void ajustarColunas();
+    void preencherLargura();  // a coluna do nome ocupa a largura que sobra
     void atualizarEstado();
 
     int turmaAtualId() const;

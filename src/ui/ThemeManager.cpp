@@ -7,7 +7,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFont>
+#include <QEvent>
 #include <QFontDatabase>
+#include <QHeaderView>
 #include <QPainter>
 #include <QPixmap>
 #include <QPointer>
@@ -41,6 +43,23 @@ struct IconeDeBotao {
     int tamanho;
 };
 QList<IconeDeBotao> g_iconesDeBotoes;
+
+// A QSS não alinha o texto dos cabeçalhos de tabela (o Qt os centraliza). Para o título ficar sobre o texto
+// da coluna, todo cabeçalho horizontal passa a alinhar à esquerda quando é preparado; quem quiser centralizado
+// (colunas de números) marca o cabeçalho com setProperty("centralizado", true).
+class AlinhadorDeCabecalhos : public QObject {
+public:
+    using QObject::QObject;
+    bool eventFilter(QObject *objeto, QEvent *evento) override
+    {
+        if (evento->type() == QEvent::Polish) {
+            if (auto *cabecalho = qobject_cast<QHeaderView *>(objeto);
+                cabecalho && cabecalho->orientation() == Qt::Horizontal && !cabecalho->property("centralizado").toBool())
+                cabecalho->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        }
+        return QObject::eventFilter(objeto, evento);
+    }
+};
 
 }  // namespace
 
@@ -125,8 +144,8 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
 
         /* Barra lateral: clara, com borda à direita (os itens são desenhados por BotaoNav) */
         #sidebar { background: @{surface-200}; border-right: 1px solid @{line}; }
-        #sidebar QLabel#appTitle { background: transparent; color: @{ink};
-            font-size: 22px; font-weight: 700; padding: 18px 16px 10px 16px; }
+        #sidebar QWidget#marcaTopo { background: transparent; }
+        #sidebar QLabel#appTitle { background: transparent; color: @{ink}; font-size: 22px; font-weight: 700; }
         #sidebar QFrame#divisor { background: @{line}; max-height: 1px; min-height: 1px; margin: 6px 12px; border: none; }
         #sidebar QLabel { background: transparent; }
         #sidebar QLabel#avatar { background: @{primary-soft}; color: @{primary}; border-radius: 16px;
@@ -140,12 +159,18 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
         QLabel#sectionTitle { font-size: 17px; font-weight: 600; background: transparent; }
         QFrame#card { background: @{surface-200}; border: 1px solid @{line}; border-radius: 10px; }
         QFrame#card QLabel { background: transparent; }
+        QFrame#card QWidget#linhaDoCartao { background: transparent; }
+        QFrame#indicador { background: @{surface-200}; border: 1px solid @{line}; border-radius: 10px; }
+        QFrame#indicador QLabel { background: transparent; }
+        QLabel#indicadorNumero, QFrame#indicador QLabel#indicadorNumero { font-size: 30px; font-weight: 700; }
+        QLabel#indicadorRotulo, QFrame#indicador QLabel#indicadorRotulo { color: @{ink-muted}; font-size: 13px; }
 
         /* Tela de login */
         QDialog#login { background: @{surface-100}; border: 1px solid @{line}; }
         QFrame#painelMarca { background: @{primary}; border: none; }
         QFrame#painelMarca QLabel { background: transparent; color: @{on-primary}; }
         QLabel#marcaGrande { font-size: 34px; font-weight: 700; }
+        QLabel#sobreNome { font-size: 30px; font-weight: 700; background: transparent; }
         QLabel#marcaFrase { font-size: 16px; }
         QLabel#tituloLogin { font-size: 26px; font-weight: 700; background: transparent; }
         QLabel#dicaLogin { color: @{ink-muted}; font-size: 13px; background: transparent; }
@@ -219,7 +244,8 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
             border: 1px solid @{line}; border-radius: 10px; gridline-color: @{line};
             selection-background-color: @{primary-soft}; selection-color: @{ink}; outline: none; }
         QHeaderView::section { background: @{surface-300}; color: @{ink-muted}; border: none;
-            border-bottom: 1px solid @{line}; padding: 8px; font-weight: 600; }
+            border-bottom: 1px solid @{line}; padding: 9px 8px; font-weight: 600; font-size: 13px; text-align: left; }
+        QTableView::item { padding: 2px 6px; }
         QTableCornerButton::section { background: @{surface-300}; border: none; }
 
         /* Abas (Turmas, Frequência) */
@@ -266,8 +292,15 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
 
         /* Divisores, rolagem e status */
         QSplitter::handle { background: transparent; }
-        QStatusBar { background: @{surface-200}; color: @{ink-muted}; font-size: 13px; }
+        QStatusBar { background: @{surface-200}; color: @{ink-muted}; font-size: 13px; border-top: 1px solid @{line}; }
         QStatusBar::item { border: none; }
+        QStatusBar QLabel { background: transparent; padding-left: 14px; }
+        QStatusBar QPushButton#link { padding: 2px 14px 2px 8px; font-size: 13px; }
+
+        /* Estado vazio (listas e painéis sem conteúdo) */
+        QWidget#estadoVazio { background: transparent; }
+        QWidget#estadoVazio QLabel { background: transparent; }
+        QLabel#estadoVazioTitulo { font-size: 17px; font-weight: 600; color: @{ink}; }
         QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
         QScrollBar::handle:vertical { background: @{line-strong}; border-radius: 5px; min-height: 30px; }
         QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
@@ -296,6 +329,11 @@ QString ThemeManager::montarFolhaDeEstilo(Tema tema)
 void ThemeManager::aplicar(Tema tema)
 {
     g_tema = tema;
+    static bool alinhadorInstalado = false;
+    if (!alinhadorInstalado) {
+        alinhadorInstalado = true;
+        qApp->installEventFilter(new AlinhadorDeCabecalhos(qApp));
+    }
     qApp->setStyle(QStyleFactory::create(QStringLiteral("Fusion")));  // aparência igual em todos os SOs
     aplicarFonte();
     qApp->setStyleSheet(montarFolhaDeEstilo(tema));

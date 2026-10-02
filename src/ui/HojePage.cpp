@@ -78,6 +78,33 @@ QFrame *criarCartao(const QString &icone, const QString &titulo, QVBoxLayout **l
     return cartao;
 }
 
+// Indicador do topo do painel: ícone + rótulo e, embaixo, o número em destaque.
+QFrame *criarIndicador(const QString &icone, const QString &rotulo, QLabel **numero)
+{
+    auto *quadro = new QFrame;
+    quadro->setObjectName(QStringLiteral("indicador"));
+    auto *layout = new QVBoxLayout(quadro);
+    layout->setContentsMargins(18, 14, 18, 14);
+    layout->setSpacing(4);
+
+    auto *cabecalho = new QHBoxLayout;
+    cabecalho->setSpacing(8);
+    auto *lblIcone = new QLabel;
+    lblIcone->setProperty("iconeDoCartao", icone);  // refeito quando o tema muda
+    lblIcone->setPixmap(ThemeManager::pixmap(icone, ThemeManager::cor(Tokens::Id::InkMuted), 20));
+    lblIcone->setFixedSize(22, 22);
+    auto *lblRotulo = new QLabel(rotulo);
+    lblRotulo->setObjectName(QStringLiteral("indicadorRotulo"));
+    cabecalho->addWidget(lblIcone);
+    cabecalho->addWidget(lblRotulo, 1);
+    layout->addLayout(cabecalho);
+
+    *numero = new QLabel(QStringLiteral("0"));
+    (*numero)->setObjectName(QStringLiteral("indicadorNumero"));
+    layout->addWidget(*numero);
+    return quadro;
+}
+
 QLabel *textoMudo(const QString &texto)
 {
     auto *l = new QLabel(texto);
@@ -163,7 +190,18 @@ HojePage::HojePage(Repositorios &repos, QWidget *parent)
     m_resumo->setObjectName(QStringLiteral("pageSubtitle"));
     raiz->addWidget(m_data);
     raiz->addWidget(m_resumo);
-    raiz->addSpacing(14);
+    raiz->addSpacing(10);
+
+    // Faixa de indicadores (os números também estão escritos nos cartões abaixo).
+    auto *faixa = new QHBoxLayout;
+    faixa->setSpacing(16);
+    faixa->addWidget(criarIndicador(QStringLiteral("aulas"), QStringLiteral("Aulas hoje"), &m_numAulas));
+    faixa->addWidget(criarIndicador(QStringLiteral("tarefa-ok"), QStringLiteral("Tarefas pendentes"), &m_numTarefas));
+    faixa->addWidget(criarIndicador(QStringLiteral("anotacoes"),
+                                    QStringLiteral("Provas em %1 dias").arg(kDiasProvas), &m_numProvas));
+    faixa->addWidget(criarIndicador(QStringLiteral("alerta"), QStringLiteral("Alunos em atenção"), &m_numAtencao));
+    raiz->addLayout(faixa);
+    raiz->addSpacing(10);
 
     // Quatro cartões: aulas | tarefas  /  alunos em atenção | provas  (coluna da esquerda mais larga)
     auto *grade = new QGridLayout;
@@ -221,15 +259,13 @@ void HojePage::atualizar()
     atualizarProvas(hoje, &provas);
     atualizarAtencao(&atencao);
 
-    m_resumo->setText(QStringLiteral("%1 · %2 · %3")
-                          .arg(aulas == 1 ? QStringLiteral("1 aula") : QStringLiteral("%1 aulas").arg(aulas),
-                               tarefas == 1 ? QStringLiteral("1 tarefa pendente")
-                                            : QStringLiteral("%1 tarefas pendentes").arg(tarefas),
-                               provas == 1 ? QStringLiteral("1 prova nos próximos %1 dias").arg(kDiasProvas)
-                                           : QStringLiteral("%1 provas nos próximos %2 dias").arg(provas).arg(kDiasProvas)));
-    if (atencao > 0)
-        m_resumo->setText(m_resumo->text() + (atencao == 1 ? QStringLiteral(" · 1 aluno em atenção")
-                                                          : QStringLiteral(" · %1 alunos em atenção").arg(atencao)));
+    m_numAulas->setText(QString::number(aulas));
+    m_numTarefas->setText(QString::number(tarefas));
+    m_numProvas->setText(QString::number(provas));
+    m_numAtencao->setText(QString::number(atencao));
+    m_resumo->setText(aulas == 0 && tarefas == 0 && atencao == 0
+                          ? QStringLiteral("Dia tranquilo: nada marcado para hoje.")
+                          : QStringLiteral("O que pede a sua atenção hoje."));
 }
 
 // ============================================================================
@@ -255,6 +291,7 @@ void HojePage::atualizarAulas(const QDate &hoje, const QTime &agora, int *total)
             proximaMarcada = true;
 
         auto *linha = new QWidget;
+        linha->setObjectName(QStringLiteral("linhaDoCartao"));
         auto *hl = new QHBoxLayout(linha);
         hl->setContentsMargins(0, 0, 0, 0);
         hl->setSpacing(12);
@@ -309,6 +346,7 @@ void HojePage::atualizarTarefas(const QDate &hoje, int *total)
 
     for (const Tarefa &t : tarefas) {
         auto *linha = new QWidget;
+        linha->setObjectName(QStringLiteral("linhaDoCartao"));
         auto *vl = new QVBoxLayout(linha);
         vl->setContentsMargins(0, 0, 0, 0);
         vl->setSpacing(0);
@@ -393,6 +431,7 @@ void HojePage::atualizarAtencao(int *total)
         const bool critico = a.nivel == AtencaoUtil::Nivel::Critico;
 
         auto *linha = new QWidget;
+        linha->setObjectName(QStringLiteral("linhaDoCartao"));
         auto *vl = new QVBoxLayout(linha);
         vl->setContentsMargins(0, 0, 0, 0);
         vl->setSpacing(1);

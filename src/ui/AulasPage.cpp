@@ -4,6 +4,7 @@
 #include "database/Repositorios.h"
 #include "database/TurmaRepository.h"
 #include "ui/AnexosWidget.h"
+#include "ui/EstadoVazio.h"
 
 #include <QComboBox>
 #include <QDate>
@@ -53,15 +54,16 @@ AulasPage::AulasPage(Repositorios &repos, QWidget *parent)
     m_lista = new QListWidget;
     m_lista->setAlternatingRowColors(true);
     ll->addWidget(m_lista, 1);
+    EstadoVazio::sobre(m_lista, QStringLiteral("aulas"), QStringLiteral("Nenhum plano de aula"),
+                       QStringLiteral("Os planos que você criar aparecem aqui."));
 
     // ---------------- Editor ----------------
     auto *painelEditor = new QWidget;
     auto *le = new QVBoxLayout(painelEditor);
     le->setContentsMargins(12, 0, 0, 0);
 
-    m_vazio = new QLabel(QStringLiteral("Selecione um plano de aula ou clique em \"+ Novo plano\"."));
-    m_vazio->setObjectName(QStringLiteral("muted"));
-    m_vazio->setAlignment(Qt::AlignCenter);
+    m_vazio = new EstadoVazio(QStringLiteral("aulas"), QStringLiteral("Nenhum plano aberto"),
+                              QStringLiteral("Selecione um plano da lista ou clique em \"+ Novo plano\"."));
     le->addWidget(m_vazio, 1);
 
     m_editor = new QWidget;

@@ -19,9 +19,11 @@
 #include "ui/GerenteDeLembretes.h"
 #include "ui/HojePage.h"
 #include "ui/HorarioPage.h"
+#include "ui/IconeDaJanela.h"
 #include "ui/NotasPage.h"
 #include "ui/PilhaAnimada.h"
 #include "ui/RelatoriosPage.h"
+#include "ui/SobreDialog.h"
 #include "ui/TarefasPage.h"
 #include "ui/ThemeManager.h"
 #include "ui/TurmasPage.h"
@@ -193,7 +195,19 @@ MainWindow::MainWindow(Repositorios &repos, const QString &nomeUsuario, const QS
     connect(m_timerBackup, &QTimer::timeout, this, [this] { verificarBackupAutomatico(kIntervaloBackupHoras); });
     m_timerBackup->start(60 * 60 * 1000);
 
-    statusBar()->showMessage(QStringLiteral("Pronto · Ctrl+K busca em tudo"), 4000);
+    // Rodapé: dica de atalhos à esquerda; versão e autor à direita (clique ou F1 abre "Sobre o Caderno+").
+    auto *dica = new QLabel(QStringLiteral("Ctrl+K busca em tudo  ·  Ctrl+1 a Ctrl+0 trocam de seção"));
+    dica->setObjectName(QStringLiteral("muted"));
+    statusBar()->addWidget(dica);
+    auto *botaoSobre = new QPushButton(QStringLiteral("Caderno+ %1  ·  por %2").arg(versaoDoApp(), autorDoApp()));
+    botaoSobre->setObjectName(QStringLiteral("link"));
+    botaoSobre->setCursor(Qt::PointingHandCursor);
+    botaoSobre->setToolTip(QStringLiteral("Sobre o Caderno+ (F1)"));
+    botaoSobre->setAccessibleName(QStringLiteral("Sobre o Caderno+"));
+    connect(botaoSobre, &QPushButton::clicked, this, &MainWindow::abrirSobre);
+    statusBar()->addPermanentWidget(botaoSobre);
+    auto *atalhoSobre = new QShortcut(QKeySequence(Qt::Key_F1), this);
+    connect(atalhoSobre, &QShortcut::activated, this, &MainWindow::abrirSobre);
 
     // Como não há moldura, as bordas da janela são tratadas aqui (cursor e redimensionar).
     qApp->installEventFilter(this);
@@ -226,11 +240,33 @@ void MainWindow::construirBarraLateral(QWidget *barra, const QString &nomeUsuari
 
     // Assinatura do design: nome em Figtree Bold, com o "+" em ocre (texto refeito quando o tema muda).
     // Também serve para arrastar a janela.
+    auto *topo = new QWidget;
+    topo->setObjectName(QStringLiteral("marcaTopo"));
+    topo->setProperty("arrastaJanela", true);
+    topo->installEventFilter(this);
+    auto *linhaMarca = new QHBoxLayout(topo);
+    linhaMarca->setContentsMargins(16, 18, 16, 12);
+    linhaMarca->setSpacing(10);
+
+    auto *logo = new QLabel;
+    const qreal escala = barra->devicePixelRatioF();
+    QPixmap marca(QStringLiteral(":/icons/icon-512.png"));
+    marca = marca.scaled(QSize(30, 30) * escala, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    marca.setDevicePixelRatio(escala);
+    logo->setPixmap(marca);
+    logo->setFixedSize(30, 30);
+    logo->setAccessibleName(QStringLiteral("Logo do Caderno+"));
+    logo->setProperty("arrastaJanela", true);
+    logo->installEventFilter(this);
+
     m_titulo = new QLabel;
     m_titulo->setObjectName(QStringLiteral("appTitle"));
     m_titulo->setTextFormat(Qt::RichText);
+    m_titulo->setProperty("arrastaJanela", true);
     m_titulo->installEventFilter(this);
-    layout->addWidget(m_titulo);
+    linhaMarca->addWidget(logo);
+    linhaMarca->addWidget(m_titulo, 1);
+    layout->addWidget(topo);
 
     // Os botões de navegação ficam num layout próprio; adicionarSecao() os insere aqui.
     m_layoutNavegacao = new QVBoxLayout;
@@ -398,8 +434,8 @@ bool MainWindow::eventFilter(QObject *objeto, QEvent *evento)
         break;
     }
 
-    // Clicar na assinatura "Caderno+" arrasta a janela (como a barra de título).
-    if (objeto == m_titulo && evento->type() == QEvent::MouseButtonPress) {
+    // Clicar na assinatura "Caderno+" (logo ou nome) arrasta a janela, como a barra de título.
+    if (objeto->property("arrastaJanela").toBool() && evento->type() == QEvent::MouseButtonPress) {
         auto *mouse = static_cast<QMouseEvent *>(evento);
         if (mouse->button() == Qt::LeftButton && windowHandle()) {
             windowHandle()->startSystemMove();
@@ -425,6 +461,18 @@ bool MainWindow::eventFilter(QObject *objeto, QEvent *evento)
         atualizarCursorDaBorda({});
     }
     return QMainWindow::eventFilter(objeto, evento);
+}
+
+void MainWindow::abrirSobre()
+{
+    SobreDialog dlg(this);
+    dlg.exec();
+}
+
+void MainWindow::showEvent(QShowEvent *evento)
+{
+    QMainWindow::showEvent(evento);
+    IconeDaJanela::aplicar(this);  // logo nítido na barra de tarefas, mesmo sem a moldura do sistema
 }
 
 void MainWindow::changeEvent(QEvent *evento)

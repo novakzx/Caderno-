@@ -11,6 +11,9 @@
 // Roda tanto em segundo plano (com a janela) quanto direto (modo silencioso: --silent).
 namespace Instalar {
 
+// Autoria (a mesma de src/core/BuildInfo.h): rodapé do instalador, "Editor" em Configurações > Aplicativos.
+inline constexpr const wchar_t *kAutor = L"Gabriel (novakzx)";
+
 struct Opcoes {
     std::wstring pasta;  // já resolvida (veja resolverPasta)
     bool atalhoAreaDeTrabalho = true;

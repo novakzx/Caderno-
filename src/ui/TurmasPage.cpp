@@ -1,4 +1,5 @@
 #include "ui/TurmasPage.h"
+#include "ui/EstadoVazio.h"
 #include "ui/ThemeManager.h"
 
 #include "database/AlunoRepository.h"
@@ -105,6 +106,8 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
     m_tabelaTurmas->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_tabelaTurmas->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     lt->addWidget(m_tabelaTurmas, 1);
+    EstadoVazio::sobre(m_tabelaTurmas, QStringLiteral("turmas"), QStringLiteral("Nenhuma turma ainda"),
+                       QStringLiteral("Clique em \"+ Nova turma\" para começar."));
 
     auto *rodapeTurmas = new QHBoxLayout;
     m_mostrarArquivadas = new QCheckBox(QStringLiteral("Mostrar arquivadas"));
@@ -146,17 +149,21 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
 
     m_tabelaAlunos = new QTableWidget(0, 6);
     m_tabelaAlunos->setHorizontalHeaderLabels({QStringLiteral("Matrícula"), QStringLiteral("Nome"),
-                                               QStringLiteral("E-mail"), QStringLiteral("Nascimento"),
+                                               QStringLiteral("E-mail"), QStringLiteral("Nasc."),
                                                QStringLiteral("Situação"), QStringLiteral("Ocorr.")});
     configurarTabela(m_tabelaAlunos);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);  // o nome nunca é cortado
+    m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);           // o e-mail usa o que sobrar
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_tabelaAlunos->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_tabelaAlunos->horizontalHeaderItem(3)->setToolTip(QStringLiteral("Data de nascimento"));
     m_tabelaAlunos->horizontalHeaderItem(5)->setToolTip(QStringLiteral("Ocorrências registradas sobre o aluno"));
+    m_tabelaAlunos->horizontalHeaderItem(5)->setTextAlignment(Qt::AlignCenter);  // a coluna tem números centralizados
     la->addWidget(m_tabelaAlunos, 1);
+    EstadoVazio::sobre(m_tabelaAlunos, QStringLiteral("aluno"), QStringLiteral("Nenhum aluno nesta turma"),
+                       QStringLiteral("Use \"+ Novo aluno\" ou \"Importar lista…\" para cadastrar."));
 
     auto *rodapeAlunos = new QHBoxLayout;
     m_btnOcorrencias = new QPushButton(QStringLiteral("Ocorrências…"));
@@ -202,8 +209,8 @@ TurmasPage::TurmasPage(Repositorios &repos, QWidget *parent)
 
     divisor->addWidget(painelTurmas);
     divisor->addWidget(m_abas);
-    divisor->setStretchFactor(0, 2);
-    divisor->setStretchFactor(1, 3);
+    divisor->setStretchFactor(0, 1);  // a lista de alunos precisa de mais espaço que a de turmas
+    divisor->setStretchFactor(1, 2);
     raiz->addWidget(divisor, 1);
 
     // ------------------------------ Conexões ------------------------------

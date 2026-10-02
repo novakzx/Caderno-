@@ -3,6 +3,7 @@
 #include "core/BuildInfo.h"
 #include "core/ContaUtil.h"
 #include "ui/BotoesAnimados.h"
+#include "ui/IconeDaJanela.h"
 #include "ui/PilhaAnimada.h"
 #include "ui/ThemeManager.h"
 
@@ -177,8 +178,10 @@ QWidget *LoginDialog::criarPainelMarca()
     }
     layout->addStretch(1);
 
-    auto *rodape = new QLabel(QStringLiteral("Versão %1").arg(versaoDoApp()));
+    auto *rodape = new QLabel(QStringLiteral("Versão %1  ·  por %2").arg(versaoDoApp(), autorDoApp()));
     rodape->setObjectName(QStringLiteral("marcaFrase"));
+    rodape->setTextFormat(Qt::PlainText);
+    rodape->setWordWrap(true);
     layout->addWidget(rodape);
     return painel;
 }
@@ -606,6 +609,7 @@ void LoginDialog::mousePressEvent(QMouseEvent *evento)
 void LoginDialog::showEvent(QShowEvent *evento)
 {
     QDialog::showEvent(evento);
+    IconeDaJanela::aplicar(this);
     static bool animado = false;  // só na primeira abertura (não a cada logout)
     if (!animado) {
         animado = true;

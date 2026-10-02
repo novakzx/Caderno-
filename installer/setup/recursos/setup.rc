@@ -19,10 +19,11 @@ BEGIN
   BEGIN
     BLOCK "041604B0"
     BEGIN
-      VALUE "CompanyName", "Caderno+"
+      VALUE "CompanyName", "Gabriel (novakzx)"
       VALUE "FileDescription", "Instalador do Caderno+"
       VALUE "FileVersion", "1.1.0"
       VALUE "InternalName", "CadernoSetup"
+      VALUE "LegalCopyright", "Copyright (C) 2026 Gabriel (novakzx)"
       VALUE "OriginalFilename", "CadernoSetup.exe"
       VALUE "ProductName", "Caderno+"
       VALUE "ProductVersion", "1.1.0"

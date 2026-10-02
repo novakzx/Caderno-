@@ -171,7 +171,12 @@ QWidget *ConfiguracoesDialog::criarAbaIa()
     QWidget *w = pagina(&v);
     v->addWidget(textoMudo(QStringLiteral("O Assistente usa o Cloudflare Workers AI, que tem um uso gratuito diário (10.000 \"neurons\"). "
                                           "Você usa a SUA conta gratuita do Cloudflare: crie uma conta, copie o Account ID e crie um token com a "
-                                          "permissão \"Workers AI\". O passo a passo está em docs/GUIA-IA.md.")));
+                                          "permissão \"Workers AI\".")));
+    auto *passoAPasso = new QPushButton(QStringLiteral("Abrir o passo a passo no navegador"));
+    passoAPasso->setObjectName(QStringLiteral("link"));
+    passoAPasso->setCursor(Qt::PointingHandCursor);
+    connect(passoAPasso, &QPushButton::clicked, this, [] { QDesktopServices::openUrl(QUrl(guiaDaIa())); });
+    v->addWidget(passoAPasso, 0, Qt::AlignLeft);
 
     const ConfigIa atual = IaConfig::carregar();
     m_iaConta = new QLineEdit(atual.accountId);

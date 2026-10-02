@@ -164,7 +164,12 @@ Adicione uma nova `Migracao` (versao + 1) no fim de `Migrations::todas()` em `sr
 do programa é recusado na restauração.
 
 ## Atalhos
-`Ctrl+1…9`, `Ctrl+0` seções · `Ctrl+K` busca global · na planilha de notas: `Ctrl+C`, `Ctrl+V`, `Delete`, `F2`.
+`Ctrl+1…9`, `Ctrl+0` seções · `Ctrl+K` busca global · `F1` Sobre o Caderno+ · na planilha de notas: `Ctrl+C`, `Ctrl+V`, `Delete`, `F2`.
+
+## Autoria
+Caderno+ é feito por **Gabriel (novakzx)**. O nome aparece em "Sobre o Caderno+" (rodapé da janela ou `F1`), na tela de entrada, no instalador
+e nas propriedades do `.exe`. Para mudar o texto, edite `autorDoApp()` em `src/core/BuildInfo.h`, `resources/app.rc.in`,
+`installer/setup/src/instalar.h` (`kAutor`) e `installer/setup/recursos/setup.rc`.
 
 ## Limitações conhecidas
 - A chamada é por **dia** (uma por turma/dia), não por aula: duas aulas da mesma turma no mesmo dia compartilham a chamada.
